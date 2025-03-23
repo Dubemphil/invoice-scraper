@@ -12,6 +12,7 @@ COPY app/package.json app/package-lock.json /app/
 RUN npm install --omit=dev
 
 # Copy the application source code
+WORKDIR /app
 COPY . .
 
 # Expose port
