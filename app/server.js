@@ -1,16 +1,24 @@
 const express = require('express');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const puppeteer = require('puppeteer');
-const creds = require('./credentials.json'); // Google service account credentials
+const dotenv = require('dotenv');
+
+dotenv.config(); // Load environment variables
 
 const app = express();
 const PORT = process.env.PORT || 8080; // Cloud Run requires PORT 8080
-const SHEET_ID = 'your_google_sheet_id';
+const SHEET_ID = process.env.SHEET_ID; // Use environment variable
+
+// Ensure credentials are set
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.error("❌ GOOGLE_APPLICATION_CREDENTIALS is not set.");
+    process.exit(1);
+}
 
 // Access Google Sheet
 async function accessSheet(sheetId) {
     const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useServiceAccountAuth(creds);
+    await doc.useServiceAccountAuth(require(process.env.GOOGLE_APPLICATION_CREDENTIALS));
     await doc.loadInfo();
     return doc.sheetsByIndex[0];
 }
@@ -35,13 +43,11 @@ async function scrapeInvoice(url) {
         const businessName = document.querySelector('selector-for-business-name')?.innerText || '';
         const payDeadline = document.querySelector('selector-for-pay-deadline')?.innerText || '';
 
-        const items = Array.from(document.querySelectorAll('selector-for-items')).map(item => {
-            return {
-                name: item.querySelector('selector-for-item-name')?.innerText || '',
-                pricePerUnit: item.querySelector('selector-for-item-price')?.innerText || '',
-                totalPrice: item.querySelector('selector-for-item-total')?.innerText || ''
-            };
-        });
+        const items = Array.from(document.querySelectorAll('selector-for-items')).map(item => ({
+            name: item.querySelector('selector-for-item-name')?.innerText || '',
+            pricePerUnit: item.querySelector('selector-for-item-price')?.innerText || '',
+            totalPrice: item.querySelector('selector-for-item-total')?.innerText || ''
+        }));
 
         return { grandTotal, businessName, payDeadline, items };
     });
@@ -53,6 +59,10 @@ async function scrapeInvoice(url) {
 // Main Route to Trigger Scraping
 app.get('/scrape', async (req, res) => {
     try {
+        if (!SHEET_ID) {
+            throw new Error("SHEET_ID is not set in environment variables.");
+        }
+
         const sheet = await accessSheet(SHEET_ID);
         const rows = await sheet.getRows();
 
@@ -79,4 +89,4 @@ app.get('/scrape', async (req, res) => {
 });
 
 // Ensure Cloud Run Compatibility
-app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ Server running on port ${PORT}`));
