@@ -56,7 +56,7 @@ const { accessSheet, updateSheet } = require('./googlesheet');
 const { scrapeInvoice } = require('./scraper');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const SHEET_ID = 'your_google_sheet_id';
 
 app.get('/scrape', async (req, res) => {
