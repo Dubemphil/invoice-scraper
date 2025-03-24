@@ -60,6 +60,8 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6
 
+# Install Puppeteer
+RUN npm install puppeteer
 
 # Set working directory
 WORKDIR /app
