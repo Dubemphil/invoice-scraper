@@ -10,15 +10,25 @@ const PORT = process.env.PORT || 8080; // Cloud Run requires PORT 8080
 const SHEET_ID = process.env.SHEET_ID; // Use environment variable
 
 // Ensure credentials are set
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    console.error("❌ GOOGLE_APPLICATION_CREDENTIALS is not set.");
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+    console.error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
+    process.exit(1);
+}
+
+// Decode Base64 credentials
+const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
+let credentials;
+try {
+    credentials = JSON.parse(credentialsJSON);
+} catch (error) {
+    console.error("❌ Failed to parse decoded credentials JSON:", error);
     process.exit(1);
 }
 
 // Access Google Sheet
 async function accessSheet(sheetId) {
     const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useServiceAccountAuth(require(process.env.GOOGLE_APPLICATION_CREDENTIALS));
+    await doc.useServiceAccountAuth(credentials);
     await doc.loadInfo();
     return doc.sheetsByIndex[0];
 }
@@ -59,7 +69,7 @@ async function scrapeInvoice(url) {
 // Main Route to Trigger Scraping
 app.get('/scrape', async (req, res) => {
     try {
-        const sheetId = process.env.SHEET_ID; // Ensure we fetch it from environment variables
+        const sheetId = process.env.SHEET_ID;
         if (!sheetId) {
             throw new Error("SHEET_ID is not set in environment variables.");
         }
