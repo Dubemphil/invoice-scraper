@@ -50,8 +50,10 @@ async function accessSheet(sheetId) {
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
+    const client = await auth.getClient();
+
     const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useOAuth2Client(await auth.getClient());
+    await doc.useAuth(client); // ✅ Correct method to authenticate
     await doc.loadInfo();
     
     return doc.sheetsByIndex[0]; // Return first sheet
