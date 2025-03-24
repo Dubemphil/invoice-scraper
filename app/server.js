@@ -45,17 +45,19 @@ async function accessSheet(sheetId) {
     }
 
     // Authenticate using google-auth-library
+    const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { GoogleAuth } = require('google-auth-library');
+
+async function accessSheet(sheetId) {
     const auth = new GoogleAuth({
         credentials,
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
-    const client = await auth.getClient();
-
     const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useAuth(client); // ✅ Correct method to authenticate
+    await doc.useOAuth2Client(await auth.getClient());
     await doc.loadInfo();
-    
+
     return doc.sheetsByIndex[0]; // Return first sheet
 }
 // Scrape Invoice Data
