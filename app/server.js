@@ -1,13 +1,14 @@
 const express = require('express');
-const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { google } = require('googleapis');
 const puppeteer = require('puppeteer');
 const dotenv = require('dotenv');
+const path = require('path');
 
 dotenv.config(); // Load environment variables
 
 const app = express();
-const PORT = process.env.PORT || 8080; // Cloud Run requires PORT 8080
-const SHEET_ID = process.env.SHEET_ID; // Use environment variable
+const PORT = process.env.PORT || 8080;
+const SHEET_ID = process.env.SHEET_ID;
 
 // Ensure credentials are set
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
@@ -25,39 +26,32 @@ try {
     process.exit(1);
 }
 
-// Access Google Sheet
-const { GoogleAuth } = require('google-auth-library');
+// Authenticate and Set Global Google API Options
+const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
 
-async function accessSheet(sheetId) {
-    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
-        throw new Error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
-    }
+google.options({ auth }); // 🔹 Set authentication globally
 
+const sheets = google.sheets('v4');
+
+// Function to Append Data to Google Sheets
+async function appendToSheet(values) {
     try {
-        // Decode and parse JSON credentials
-        const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
-        const credentials = JSON.parse(credentialsJSON);
-
-        // Authenticate
-        const auth = new GoogleAuth({
-            credentials,
-            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: 'A1:A1', // Placeholder, Google Sheets auto-detects next row
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [values] },
         });
-
-        const client = await auth.getClient();
-
-        const doc = new GoogleSpreadsheet(sheetId);
-        await doc.useOAuth2Client(client);
-        await doc.loadInfo(); // Ensure authentication is successful
-
-        console.log("✅ Authentication successful!"); // Log success
-        return doc.sheetsByIndex[0]; // Return first sheet
-
+        console.log("✅ Data appended successfully.");
     } catch (error) {
-        console.error("❌ Error authenticating Google Sheets:", error);
+        console.error("❌ Error appending to Google Sheets:", error);
         throw error;
     }
 }
+
 // Scrape Invoice Data
 async function scrapeInvoice(url) {
     const browser = await puppeteer.launch({ headless: true });
@@ -85,26 +79,28 @@ async function scrapeInvoice(url) {
 // Main Route to Trigger Scraping
 app.get('/scrape', async (req, res) => {
     try {
-        const sheetId = process.env.SHEET_ID;
-        if (!sheetId) {
+        if (!SHEET_ID) {
             throw new Error("SHEET_ID is not set in environment variables.");
         }
 
-        const sheet = await accessSheet(sheetId);
-        const rows = await sheet.getRows();
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SHEET_ID,
+            range: 'A1:Z1000', // Adjust based on your sheet size
+        });
 
+        const rows = response.data.values || [];
         for (let i = 0; i < rows.length; i++) {
-            if (!rows[i]['Grand Total']) { // Skip if already scraped
-                const invoiceData = await scrapeInvoice(rows[i]['Invoice Link']);
-                const formattedData = {
-                    'Grand Total': invoiceData.grandTotal,
-                    'Business Name': invoiceData.businessName,
-                    'Pay Deadline': invoiceData.payDeadline,
-                    'Item A1': invoiceData.items[0]?.name || '',
-                    'Item A2': invoiceData.items[0]?.pricePerUnit || '',
-                    'Item A3': invoiceData.items[0]?.totalPrice || ''
-                };
-                await updateSheet(sheet, i, formattedData);
+            if (!rows[i][1]) { // Assuming column B is 'Grand Total', check if empty
+                const invoiceData = await scrapeInvoice(rows[i][0]); // Assuming column A has links
+                const formattedData = [
+                    invoiceData.grandTotal,
+                    invoiceData.businessName,
+                    invoiceData.payDeadline,
+                    invoiceData.items[0]?.name || '',
+                    invoiceData.items[0]?.pricePerUnit || '',
+                    invoiceData.items[0]?.totalPrice || ''
+                ];
+                await appendToSheet(formattedData);
             }
         }
 
