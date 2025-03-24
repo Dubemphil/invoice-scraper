@@ -47,3 +47,8 @@ jobs:
            --timeout=300 \
            --port 8080 \
            --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json,SHEET_ID=${{ secrets.SHEET_ID }}
+           
+      - name: Debug Credentials Secret
+        run: echo "$CREDENTIALS_JSON" | jq .
+        env:
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
