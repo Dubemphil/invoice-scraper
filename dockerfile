@@ -6,7 +6,9 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY app/package.json app/package-lock.json ./
-RUN npm install --omit=dev
+# RUN npm install --omit=dev
+RUN npm install --only=production
+
 
 # Copy the application source code
 COPY . .
