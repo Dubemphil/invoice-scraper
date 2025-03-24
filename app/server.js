@@ -54,7 +54,11 @@ async function appendToSheet(values) {
 
 // Scrape Invoice Data
 async function scrapeInvoice(url) {
-    const browser = await puppeteer.launch({ headless: true });
+    const browser = await puppeteer.launch({ 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2' });
 
@@ -75,7 +79,6 @@ async function scrapeInvoice(url) {
     await browser.close();
     return invoiceData;
 }
-
 // Main Route to Trigger Scraping
 app.get('/scrape', async (req, res) => {
     try {
