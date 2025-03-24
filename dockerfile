@@ -23,17 +23,18 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     xdg-utils \
     wget \
-    --no-install-recommends
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*  # Clean up to reduce image size
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY package.json package-lock.json ./
+COPY app/package.json app/package-lock.json ./
 RUN npm install --omit=dev
 
 # Copy the application source code
-COPY . .
+COPY app/. .
 
 # Expose port 8080
 EXPOSE 8080
