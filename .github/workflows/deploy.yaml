@@ -46,4 +46,4 @@ jobs:
            --quiet \
            --timeout=300 \
            --port 8080 \
-           --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+           --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json,SHEET_ID=${{ secrets.SHEET_ID }}

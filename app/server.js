@@ -59,11 +59,12 @@ async function scrapeInvoice(url) {
 // Main Route to Trigger Scraping
 app.get('/scrape', async (req, res) => {
     try {
-        if (!SHEET_ID) {
+        const sheetId = process.env.SHEET_ID; // Ensure we fetch it from environment variables
+        if (!sheetId) {
             throw new Error("SHEET_ID is not set in environment variables.");
         }
 
-        const sheet = await accessSheet(SHEET_ID);
+        const sheet = await accessSheet(sheetId);
         const rows = await sheet.getRows();
 
         for (let i = 0; i < rows.length; i++) {
@@ -81,9 +82,9 @@ app.get('/scrape', async (req, res) => {
             }
         }
 
-        res.send('Scraping and updating completed.');
+        res.send('✅ Scraping and updating completed.');
     } catch (error) {
-        console.error("Error in /scrape:", error);
+        console.error("❌ Error in /scrape:", error);
         res.status(500).send('Error: ' + error.message);
     }
 });
