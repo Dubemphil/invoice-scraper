@@ -33,23 +33,22 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-          - name: Create Google Credentials File
-          run: |
-            echo "${CREDENTIALS_JSON}" | base64 --decode > credentials.json
-          env:
-            CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
+      - name: Create Google Credentials File
+        run: |
+          echo "${CREDENTIALS_JSON}" | base64 --decode > credentials.json
+        env:
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
         
-          - name: Deploy to Cloud Run
-          run: |
-            gcloud run deploy invoice-scraper \
-              --image docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/invoice-scraper:${{ github.sha }} \
-              --platform managed \
-              --region us-central1 \
-              --allow-unauthenticated \
-              --quiet \
-              --timeout=300 \
-              --port 8080 \
-              --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json,SHEET_ID=${{ secrets.SHEET_ID }}
-          env:
-            CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
-        
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy invoice-scraper \
+            --image docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/invoice-scraper:${{ github.sha }} \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --quiet \
+            --timeout=300 \
+            --port 8080 \
+            --set-env-vars GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json,SHEET_ID=${{ secrets.SHEET_ID }}
+        env:
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
