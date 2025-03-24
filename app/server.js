@@ -26,7 +26,6 @@ try {
 }
 
 // Access Google Sheet
-const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { GoogleAuth } = require('google-auth-library');
 
 async function accessSheet(sheetId) {
