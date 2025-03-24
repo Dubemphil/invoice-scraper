@@ -53,32 +53,61 @@ async function appendToSheet(values) {
 }
 
 // Scrape Invoice Data
+const puppeteer = require('puppeteer');
+
 async function scrapeInvoice(url) {
-    const browser = await puppeteer.launch({ 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    let browser;
+    
+    try {
+        // Launch Puppeteer
+        browser = await puppeteer.launch({
+            headless: 'new',  // Updated for better stability
+            ignoreHTTPSErrors: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--disable-software-rasterizer'
+            ]
+        });
 
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
+        const page = await browser.newPage();
 
-    const invoiceData = await page.evaluate(() => {
-        const grandTotal = document.querySelector('selector-for-total')?.innerText || '';
-        const businessName = document.querySelector('selector-for-business-name')?.innerText || '';
-        const payDeadline = document.querySelector('selector-for-pay-deadline')?.innerText || '';
+        // Set user agent to avoid bot detection
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36');
 
-        const items = Array.from(document.querySelectorAll('selector-for-items')).map(item => ({
-            name: item.querySelector('selector-for-item-name')?.innerText || '',
-            pricePerUnit: item.querySelector('selector-for-item-price')?.innerText || '',
-            totalPrice: item.querySelector('selector-for-item-total')?.innerText || ''
-        }));
+        // Navigate to the invoice URL
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-        return { grandTotal, businessName, payDeadline, items };
-    });
+        // Extract invoice data
+        const invoiceData = await page.evaluate(() => {
+            const grandTotal = document.querySelector('selector-for-total')?.innerText.trim() || 'N/A';
+            const businessName = document.querySelector('selector-for-business-name')?.innerText.trim() || 'N/A';
+            const payDeadline = document.querySelector('selector-for-pay-deadline')?.innerText.trim() || 'N/A';
 
-    await browser.close();
-    return invoiceData;
+            const items = Array.from(document.querySelectorAll('selector-for-items')).map(item => ({
+                name: item.querySelector('selector-for-item-name')?.innerText.trim() || 'N/A',
+                pricePerUnit: item.querySelector('selector-for-item-price')?.innerText.trim() || 'N/A',
+                totalPrice: item.querySelector('selector-for-item-total')?.innerText.trim() || 'N/A'
+            }));
+
+            return { grandTotal, businessName, payDeadline, items };
+        });
+
+        return invoiceData;
+
+    } catch (error) {
+        console.error("❌ Error in scrapeInvoice:", error);
+        return { error: "Failed to scrape invoice", details: error.message };
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
+    }
 }
+
+module.exports = { scrapeInvoice };
 // Main Route to Trigger Scraping
 app.get('/scrape', async (req, res) => {
     try {
