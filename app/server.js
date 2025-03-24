@@ -53,8 +53,6 @@ async function appendToSheet(values) {
 }
 
 // Scrape Invoice Data
-const puppeteer = require('puppeteer');
-
 async function scrapeInvoice(url) {
     let browser;
     
