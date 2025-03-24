@@ -26,11 +26,21 @@ try {
 }
 
 // Access Google Sheet
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { GoogleAuth } = require('google-auth-library');
+
 async function accessSheet(sheetId) {
     const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useServiceAccountAuth(credentials);
+    
+    // Use google-auth-library for authentication
+    const auth = new GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+
+    await doc.useOAuth2Client(await auth.getClient());
     await doc.loadInfo();
-    return doc.sheetsByIndex[0];
+    return doc.sheetsByIndex[0]; // Return first sheet
 }
 
 // Update Google Sheet
