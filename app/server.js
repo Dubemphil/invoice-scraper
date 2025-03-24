@@ -30,28 +30,32 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { GoogleAuth } = require('google-auth-library');
 
 async function accessSheet(sheetId) {
-    const doc = new GoogleSpreadsheet(sheetId);
-    
-    // Use google-auth-library for authentication
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+        throw new Error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
+    }
+
+    // Decode Base64 credentials
+    const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
+
+    let credentials;
+    try {
+        credentials = JSON.parse(credentialsJSON);
+    } catch (error) {
+        throw new Error("❌ Failed to parse decoded credentials JSON: " + error.message);
+    }
+
+    // Authenticate using google-auth-library
     const auth = new GoogleAuth({
         credentials,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
+    const doc = new GoogleSpreadsheet(sheetId);
     await doc.useOAuth2Client(await auth.getClient());
     await doc.loadInfo();
+    
     return doc.sheetsByIndex[0]; // Return first sheet
 }
-
-// Update Google Sheet
-async function updateSheet(sheet, rowIndex, data) {
-    const rows = await sheet.getRows();
-    Object.keys(data).forEach(key => {
-        rows[rowIndex][key] = data[key];
-    });
-    await rows[rowIndex].save();
-}
-
 // Scrape Invoice Data
 async function scrapeInvoice(url) {
     const browser = await puppeteer.launch({ headless: true });
