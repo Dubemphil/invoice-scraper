@@ -55,7 +55,7 @@ async function appendToSheet(values) {
 // Scrape Invoice Data
 async function scrapeInvoice(url) {
     let browser;
-    
+
     try {
         // Launch Puppeteer
         browser = await puppeteer.launch({
@@ -70,6 +70,31 @@ async function scrapeInvoice(url) {
             ]
         });
 
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // Extract invoice data (you should replace this with actual scraping logic)
+        const invoiceData = await page.evaluate(() => {
+            return document.body.innerText; // Example: Extract full page text
+        });
+
+        return invoiceData;
+    } catch (error) {
+        console.error('❌ Error scraping invoice:', error);
+        return null;
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
+    }
+}
+
+// Example usage
+(async () => {
+    const url = 'https://example.com/invoice'; // Replace with actual URL
+    const data = await scrapeInvoice(url);
+    console.log('Scraped Invoice Data:', data);
+})();
         const page = await browser.newPage();
 
         // Set user agent to avoid bot detection
