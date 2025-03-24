@@ -28,6 +28,8 @@ try {
 // Access Google Sheet
 const { GoogleAuth } = require('google-auth-library');
 
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+
 async function accessSheet(sheetId) {
     if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
         throw new Error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
@@ -38,19 +40,14 @@ async function accessSheet(sheetId) {
         const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
         const credentials = JSON.parse(credentialsJSON);
 
-        // Authenticate
-        const auth = new GoogleAuth({
-            credentials,
-            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-        });
-
-        const client = await auth.getClient();
-
+        // Initialize Google Spreadsheet
         const doc = new GoogleSpreadsheet(sheetId);
-        await doc.useOAuth2Client(client);
+
+        // Authenticate using service account credentials
+        await doc.useServiceAccountAuth(credentials);
         await doc.loadInfo(); // Ensure authentication is successful
 
-        console.log("✅ Authentication successful!"); // Log success
+        console.log("✅ Authentication successful!");
         return doc.sheetsByIndex[0]; // Return first sheet
 
     } catch (error) {
