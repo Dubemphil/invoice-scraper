@@ -1,19 +1,6 @@
 {
-    "name": "invoice-scraper",
-    "version": "1.0.0",
-    "main": "server.js",
-    "scripts": {
-      "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
-    "description": "",
-    "dependencies": {
-      "dotenv": "^16.4.7",
-      "express": "^4.21.2",
-      "google-spreadsheet": "^4.1.4",
-      "puppeteer": "^24.4.0"
-    }
+  "dependencies": {
+    "google-auth-library": "^9.15.1",
+    "google-spreadsheet": "^4.1.4"
   }
-  
+}
