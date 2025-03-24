@@ -95,6 +95,26 @@ async function scrapeInvoice(url) {
     const data = await scrapeInvoice(url);
     console.log('Scraped Invoice Data:', data);
 })();
+
+async function scrapeInvoice(url) {
+    let browser;
+
+    try {
+        const puppeteer = require('puppeteer');
+
+        // Launch Puppeteer
+        browser = await puppeteer.launch({
+            headless: 'new',  
+            ignoreHTTPSErrors: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--disable-software-rasterizer'
+            ]
+        });
+
         const page = await browser.newPage();
 
         // Set user agent to avoid bot detection
@@ -102,6 +122,11 @@ async function scrapeInvoice(url) {
 
         // Navigate to the invoice URL
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+        // Wait for essential elements to load
+        await page.waitForSelector('selector-for-total', { timeout: 10000 });
+        await page.waitForSelector('selector-for-business-name', { timeout: 10000 });
+        await page.waitForSelector('selector-for-pay-deadline', { timeout: 10000 });
 
         // Extract invoice data
         const invoiceData = await page.evaluate(() => {
@@ -129,6 +154,7 @@ async function scrapeInvoice(url) {
         }
     }
 }
+
 
 module.exports = { scrapeInvoice };
 // Main Route to Trigger Scraping
