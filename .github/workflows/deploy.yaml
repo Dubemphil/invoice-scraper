@@ -32,15 +32,19 @@ jobs:
 
       - name: Debug Base64 Credentials
         run: echo "${{ secrets.CREDENTIALS_JSON }}" | base64 --decode | jq .
-        
+    
+      - name: Ensure Base64 Encoding (If Needed)
+        run: echo "${{ secrets.CREDENTIALS_JSON }}" | base64 > credentials.b64
+    
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy invoice-scraper \
-            --image docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/invoice-scraper:${{ github.sha }} \
-            --platform managed \
-            --region us-central1 \
-            --allow-unauthenticated \
-            --quiet \
-            --timeout=300 \
-            --port 8080 \
-            --set-env-vars GOOGLE_APPLICATION_CREDENTIALS_BASE64=${{ secrets.CREDENTIALS_JSON }},SHEET_ID=${{ secrets.SHEET_ID }}
+         gcloud run deploy invoice-scraper \
+          --image docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/invoice-scraper:${{ github.sha }} \
+         --platform managed \
+         --region us-central1 \
+         --allow-unauthenticated \
+         --quiet \
+         --timeout=300 \
+         --port 8080 \
+         --set-env-vars GOOGLE_APPLICATION_CREDENTIALS_BASE64=$(cat credentials.b64),SHEET_ID=${{ secrets.SHEET_ID }}
+    
