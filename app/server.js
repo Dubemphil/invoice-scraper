@@ -34,31 +34,30 @@ async function accessSheet(sheetId) {
         throw new Error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
     }
 
-    // Decode Base64 credentials
-    const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
-
-    let credentials;
     try {
-        credentials = JSON.parse(credentialsJSON);
+        // Decode and parse JSON credentials
+        const credentialsJSON = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
+        const credentials = JSON.parse(credentialsJSON);
+
+        // Authenticate
+        const auth = new GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+
+        const client = await auth.getClient();
+
+        const doc = new GoogleSpreadsheet(sheetId);
+        await doc.useOAuth2Client(client);
+        await doc.loadInfo(); // Ensure authentication is successful
+
+        console.log("✅ Authentication successful!"); // Log success
+        return doc.sheetsByIndex[0]; // Return first sheet
+
     } catch (error) {
-        throw new Error("❌ Failed to parse decoded credentials JSON: " + error.message);
+        console.error("❌ Error authenticating Google Sheets:", error);
+        throw error;
     }
-
-    // Authenticate using google-auth-library
-    const { GoogleSpreadsheet } = require('google-spreadsheet');
-const { GoogleAuth } = require('google-auth-library');
-
-async function accessSheet(sheetId) {
-    const auth = new GoogleAuth({
-        credentials,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useOAuth2Client(await auth.getClient());
-    await doc.loadInfo();
-
-    return doc.sheetsByIndex[0]; // Return first sheet
 }
 // Scrape Invoice Data
 async function scrapeInvoice(url) {
