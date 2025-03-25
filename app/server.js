@@ -65,7 +65,7 @@ app.get('/scrape', async (req, res) => {
             }
 
             // Ensure page is fully loaded
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await page.waitForTimeout(3000);
 
             // Click 'Show all' button if present
             try {
@@ -73,7 +73,7 @@ app.get('/scrape', async (req, res) => {
                 if (showAllButton) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButton.click();
-                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await page.waitForTimeout(5000);
                 } else {
                     console.warn("⚠️ 'Show all' button not found.");
                 }
@@ -102,11 +102,14 @@ app.get('/scrape', async (req, res) => {
             try {
                 await page.waitForSelector('.invoice-items-list', { timeout: 10000 });
                 items = await page.evaluate(() => {
-                    return Array.from(document.querySelectorAll('.invoice-items-list > ul > li')).map(item => ({
-                        name: item.querySelector('.invoice-item-title')?.innerText.trim() || 'N/A',
-                        ppUnit: item.querySelector('.invoice-item-unit-price')?.innerText.trim() || 'N/A',
-                        tPrice: item.querySelector('.invoice-item-price')?.innerText.trim() || 'N/A'
-                    }));
+                    return Array.from(document.querySelectorAll('.invoice-item')).map(item => {
+                        const heading = item.querySelector('.invoice-item--heading');
+                        return {
+                            name: heading?.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
+                            ppUnit: heading?.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
+                            tPrice: heading?.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
+                        };
+                    });
                 });
             } catch (itemsError) {
                 console.warn(`⏳ Items list not found for row ${rowIndex + 1}, proceeding without items.`);
@@ -120,7 +123,7 @@ app.get('/scrape', async (req, res) => {
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
                     invoiceData.businessName,
-                    ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
+                    ...items.flatMap((item, index) => [`Item ${index + 1}`, item.name, item.ppUnit, item.tPrice])
                 ]
             ];
 
