@@ -54,13 +54,22 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            await page.goto(invoiceLink, { waitUntil: 'networkidle2' });
+            try {
+                await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
+            } catch (navError) {
+                console.error(`❌ Failed to navigate to ${invoiceLink}:`, navError);
+                continue;
+            }
 
             // Click 'Show all' if present using XPath
-            const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
-            if (showAllButton) {
-                await showAllButton.click();
-                await page.waitForTimeout(2000);
+            try {
+                const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
+                if (showAllButton) {
+                    await showAllButton.click();
+                    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
+                }
+            } catch (clickError) {
+                console.error("⚠️ Error clicking 'Show all' button:", clickError);
             }
 
             // Extract invoice details
