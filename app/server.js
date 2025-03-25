@@ -86,6 +86,13 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
+                // Extract Only Invoice Number
+                const invoiceNumber = (() => {
+                    const fullText = getText('.invoice-title'); // Example: "FATURË 978/2025"
+                    const match = fullText.match(/\d+\/\d+/); // Extracts "978/2025"
+                    return match ? match[0] : 'N/A';
+                })();
+
                 // Extract Invoice Type & Pay Deadline dynamically
                 const extractFromLabel = (labelText) => {
                     const labels = [...document.querySelectorAll('label')];
@@ -98,7 +105,7 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 return {
-                    invoiceNumber: getText('.invoice-title'),  
+                    invoiceNumber: invoiceNumber,  
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
                     invoiceType: extractFromLabel('Invoice type'), // ✅ Extract Invoice Type
