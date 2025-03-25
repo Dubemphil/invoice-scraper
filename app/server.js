@@ -62,27 +62,6 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            // Switch language to English
-            try {
-                await page.waitForSelector('button[aria-haspopup="listbox"]', { timeout: 5000 });
-                await page.click('button[aria-haspopup="listbox"]'); // Open language dropdown
-
-                await page.waitForSelector('li[role="option"]'); // Wait for options to load
-                const options = await page.$$('li[role="option"]');
-
-                for (let option of options) {
-                    const text = await page.evaluate(el => el.innerText.trim(), option);
-                    if (text.toLowerCase().includes("anglisht")) {
-                        await option.click();
-                        console.log("✅ Switched language to English.");
-                        await page.waitForTimeout(3000); // Wait for content to reload
-                        break;
-                    }
-                }
-            } catch (langError) {
-                console.error("⚠️ Language switch failed:", langError);
-            }
-
             // Scroll down to ensure full page is loaded
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
             await new Promise(resolve => setTimeout(resolve, 3000));
@@ -108,14 +87,8 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                let invoiceNumber = getText('.invoice-title');
-
-                // Extract only the number part (remove "FATURË" and special characters after the number)
-                invoiceNumber = invoiceNumber.replace(/FATURË\s*/i, '').trim();
-                invoiceNumber = invoiceNumber.split('/')[0].trim(); // Extract only the first number before "/"
-
                 return {
-                    invoiceNumber,
+                    invoiceNumber: getText('.invoice-title'),
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
                 };
