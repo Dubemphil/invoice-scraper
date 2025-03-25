@@ -68,7 +68,7 @@ app.get('/scrape', async (req, res) => {
                 if (showAllButtons.length > 0) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButtons[0].click();
-                    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 5000))); // Wait for items to load
+                    await page.waitForTimeout(5000); // Wait for items to load
                 } else {
                     console.warn("⚠️ 'Show all' button not found.");
                 }
@@ -81,17 +81,20 @@ app.get('/scrape', async (req, res) => {
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
-                const getText = (selector) => {
-                    const element = document.querySelector(selector);
-                    return element ? element.innerText.trim() : 'N/A';
+                const getText = (selectors) => {
+                    for (const selector of selectors) {
+                        const element = document.querySelector(selector);
+                        if (element) return element.innerText.trim();
+                    }
+                    return 'N/A';
                 };
 
                 return {
-                    taskNumber: getText('.invoice-header h1') || getText('.task-number span'),
-                    invoiceNumber: getText('.invoice-number span') || getText('.invoice-id span'),
-                    businessName: getText('.business-name span') || getText('.company-name span'),
-                    grandTotal: getText('.grand-total span') || getText('.total-amount span'),
-                    payDeadline: getText('.pay-deadline span') || getText('.due-date span')
+                    taskNumber: getText(['.invoice-header h1', '.task-number span']),
+                    invoiceNumber: getText(['.invoice-number span', '.invoice-id span']),
+                    businessName: getText(['.business-name span', '.company-name span']),
+                    grandTotal: getText(['.grand-total span', '.total-amount span']),
+                    payDeadline: getText(['.pay-deadline span', '.due-date span'])
                 };
             });
 
