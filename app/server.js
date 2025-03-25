@@ -22,8 +22,9 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.get('/scrape', async (req, res) => {
+    let browser;
     try {
-        const browser = await puppeteer.launch({
+        browser = await puppeteer.launch({
             headless: true,
             ignoreHTTPSErrors: true,
             args: [
@@ -34,6 +35,7 @@ app.get('/scrape', async (req, res) => {
                 '--disable-software-rasterizer'
             ]
         });
+
         const page = await browser.newPage();
 
         // Load spreadsheet data
@@ -63,18 +65,20 @@ app.get('/scrape', async (req, res) => {
             }
 
             // Ensure page is fully loaded
-            await page.waitForTimeout(3000);
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Click 'Show all' button if present
             try {
-                const showAllButton = await page.waitForXPath("//button[contains(text(), 'Show all')]", { timeout: 5000 });
+                const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
                 if (showAllButton) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButton.click();
-                    await page.waitForTimeout(5000);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                } else {
+                    console.warn("⚠️ 'Show all' button not found.");
                 }
             } catch (clickError) {
-                console.warn("⚠️ 'Show all' button not found or failed to click:", clickError);
+                console.warn("⚠️ Error clicking 'Show all' button:", clickError);
             }
 
             // Extract invoice details
@@ -93,22 +97,20 @@ app.get('/scrape', async (req, res) => {
 
             console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
 
-            // Ensure items are fully loaded
+            // Extract items list
+            let items = [];
             try {
                 await page.waitForSelector('.invoice-items-list', { timeout: 10000 });
-            } catch {
-                console.warn("⏳ Items list not found, skipping item extraction.");
-                continue;
+                items = await page.evaluate(() => {
+                    return Array.from(document.querySelectorAll('.invoice-items-list > ul > li')).map(item => ({
+                        name: item.querySelector('.invoice-item-title')?.innerText.trim() || 'N/A',
+                        ppUnit: item.querySelector('.invoice-item-unit-price')?.innerText.trim() || 'N/A',
+                        tPrice: item.querySelector('.invoice-item-price')?.innerText.trim() || 'N/A'
+                    }));
+                });
+            } catch (itemsError) {
+                console.warn(`⏳ Items list not found for row ${rowIndex + 1}, proceeding without items.`);
             }
-
-            // Extract items list
-            const items = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('.invoice-items-list > ul > li')).map(item => ({
-                    name: item.querySelector('.invoice-item-title')?.innerText.trim() || 'N/A',
-                    ppUnit: item.querySelector('.invoice-item-unit-price')?.innerText.trim() || 'N/A',
-                    tPrice: item.querySelector('.invoice-item-price')?.innerText.trim() || 'N/A'
-                }));
-            });
 
             console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
 
@@ -132,11 +134,14 @@ app.get('/scrape', async (req, res) => {
             extractedData.push({ invoiceData, items });
         }
 
-        await browser.close();
         res.json({ success: true, message: "Scraping completed", data: extractedData });
+
     } catch (error) {
         console.error("❌ Error during scraping:", error);
         res.status(500).json({ success: false, message: "Scraping failed", error: error.toString() });
+
+    } finally {
+        if (browser) await browser.close();
     }
 });
 
