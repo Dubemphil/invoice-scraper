@@ -65,7 +65,7 @@ app.get('/scrape', async (req, res) => {
             }
 
             // Ensure page is fully loaded
-            await page.waitForTimeout(3000);
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ FIX APPLIED
 
             // Click 'Show all' button if present
             try {
@@ -73,7 +73,7 @@ app.get('/scrape', async (req, res) => {
                 if (showAllButton) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButton.click();
-                    await page.waitForTimeout(5000);
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ FIX APPLIED
                 } else {
                     console.warn("⚠️ 'Show all' button not found.");
                 }
