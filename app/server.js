@@ -86,12 +86,24 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
+                // Extract "Pay deadline" dynamically
+                const payDeadline = (() => {
+                    const labels = document.querySelectorAll('label');
+                    for (let label of labels) {
+                        if (label.innerText.includes("Pay deadline")) {
+                            const valueElement = label.nextElementSibling;
+                            return valueElement ? valueElement.innerText.trim() : 'N/A';
+                        }
+                    }
+                    return 'N/A';
+                })();
+
                 return {
                     taskNumber: getText('.invoice-title'),  // Invoice title (Invoice 978/2025)
                     invoiceNumber: getText('.invoice-title'),  // Same as task number
                     businessName: getText('.invoice-basic-info--business-name'),
                     grandTotal: getText('.invoice-amount h1 strong'),
-                    payDeadline: getText('label:contains("Pay deadline") + p') // Fetch Pay Deadline
+                    payDeadline: payDeadline // ✅ Fixed extraction
                 };
             });
 
