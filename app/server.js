@@ -56,14 +56,14 @@ app.get('/scrape', async (req, res) => {
             }
 
             // Ensure the page loads fully
-            await page.waitForTimeout(2000);
+            await new Promise(r => setTimeout(r, 2000));
 
             // Click 'Show all' button if present
             try {
                 const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
                 if (showAllButton) {
                     await showAllButton.click();
-                    await page.waitForTimeout(2000);
+                    await new Promise(r => setTimeout(r, 2000));
                 }
             } catch (clickError) {
                 console.error("⚠️ Error clicking 'Show all' button:", clickError);
