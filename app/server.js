@@ -21,6 +21,17 @@ const sheets = google.sheets('v4');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Function to convert a number to a Google Sheets column letter (e.g., 27 -> "AA")
+const getColumnLetter = (colNum) => {
+    let column = "";
+    while (colNum > 0) {
+        let remainder = (colNum - 1) % 26;
+        column = String.fromCharCode(65 + remainder) + column;
+        colNum = Math.floor((colNum - 1) / 26);
+    }
+    return column;
+};
+
 app.get('/scrape', async (req, res) => {
     let browser;
     try {
@@ -119,9 +130,10 @@ app.get('/scrape', async (req, res) => {
 
             // Calculate required columns
             const numColumns = 3 + items.length * 3; // Invoice fields (3) + 3 columns per item
-            const startColumn = 'B';
-            const endColumn = String.fromCharCode(startColumn.charCodeAt(0) + numColumns - 1);
-            const range = `Sheet1!${startColumn}${rowIndex + 1}:${endColumn}${rowIndex + 1}`;
+            const startColumnIndex = 2; // "B" = 2nd column in Sheets
+            const endColumnIndex = startColumnIndex + numColumns - 1;
+            const endColumnLetter = getColumnLetter(endColumnIndex);
+            const range = `Sheet1!B${rowIndex + 1}:${endColumnLetter}${rowIndex + 1}`;
 
             // Prepare update values
             const updateValues = [
@@ -129,7 +141,7 @@ app.get('/scrape', async (req, res) => {
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
                     invoiceData.businessName,
-                    ...items.flatMap((item, index) => [`Item ${index + 1}`, item.name, item.ppUnit, item.tPrice])
+                    ...items.flatMap((item) => [item.name, item.ppUnit, item.tPrice])
                 ]
             ];
 
