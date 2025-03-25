@@ -53,10 +53,10 @@ app.get('/scrape', async (req, res) => {
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
             spreadsheetId: sheetId,
-            range: 'Sheet1!A:A',
+            range: 'Sheet1',
         });
 
-        const rows = data.values;
+        const rows = data.values || [];
         let extractedData = [];
 
         for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
@@ -128,12 +128,16 @@ app.get('/scrape', async (req, res) => {
 
             console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
 
+            // Find the first empty column in the current row
+            const existingRow = rows[rowIndex] || [];
+            let startColumnIndex = existingRow.length + 1; // Start after existing columns
+
             // Calculate required columns
             const numColumns = 3 + items.length * 3; // Invoice fields (3) + 3 columns per item
-            const startColumnIndex = 2; // "B" = 2nd column in Sheets
             const endColumnIndex = startColumnIndex + numColumns - 1;
+            const startColumnLetter = getColumnLetter(startColumnIndex);
             const endColumnLetter = getColumnLetter(endColumnIndex);
-            const range = `Sheet1!B${rowIndex + 1}:${endColumnLetter}${rowIndex + 1}`;
+            const range = `Sheet1!${startColumnLetter}${rowIndex + 1}:${endColumnLetter}${rowIndex + 1}`;
 
             // Prepare update values
             const updateValues = [
