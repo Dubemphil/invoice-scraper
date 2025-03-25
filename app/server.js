@@ -102,15 +102,8 @@ app.get('/scrape', async (req, res) => {
                     invoiceNumber: getText('.invoice-title'),  
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
-                    const invoiceType = (() => {
-                        const label = [...document.querySelectorAll('label')].find(label => label.innerText.includes("Invoice type"));
-                        return label ? label.closest('.form-group')?.querySelector('p')?.innerText.trim() || 'N/A' : 'N/A';
-                    })(); // ✅ Extract Invoice Type
-                    
-                    const payDeadline = (() => {
-                        const label = [...document.querySelectorAll('label')].find(label => label.innerText.includes("Pay deadline"));
-                        return label ? label.closest('.form-group')?.querySelector('p')?.innerText.trim() || 'N/A' : 'N/A';
-                    })();// ✅ Extract Pay Deadline
+                    invoiceType: getDynamicText('Invoice type'), // ✅ Extract Invoice Type
+                    payDeadline: getDynamicText('Pay deadline') // ✅ Extract Pay Deadline
                 };
             });
 
