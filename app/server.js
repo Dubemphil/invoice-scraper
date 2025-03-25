@@ -65,7 +65,7 @@ app.get('/scrape', async (req, res) => {
             }
 
             // Ensure page is fully loaded
-            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ FIX APPLIED
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Click 'Show all' button if present
             try {
@@ -73,7 +73,7 @@ app.get('/scrape', async (req, res) => {
                 if (showAllButton) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButton.click();
-                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ FIX APPLIED
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                 } else {
                     console.warn("⚠️ 'Show all' button not found.");
                 }
@@ -117,6 +117,12 @@ app.get('/scrape', async (req, res) => {
 
             console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
 
+            // Calculate required columns
+            const numColumns = 3 + items.length * 3; // Invoice fields (3) + 3 columns per item
+            const startColumn = 'B';
+            const endColumn = String.fromCharCode(startColumn.charCodeAt(0) + numColumns - 1);
+            const range = `Sheet1!${startColumn}${rowIndex + 1}:${endColumn}${rowIndex + 1}`;
+
             // Prepare update values
             const updateValues = [
                 [
@@ -129,7 +135,7 @@ app.get('/scrape', async (req, res) => {
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,
+                range: range,
                 valueInputOption: 'RAW',
                 resource: { values: updateValues }
             });
