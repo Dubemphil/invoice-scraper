@@ -36,6 +36,11 @@ app.get('/scrape', async (req, res) => {
         });
         const page = await browser.newPage();
 
+        // Set the browser to request English content
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'en-US,en;q=0.9',
+        });
+
         // Load spreadsheet data
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
@@ -87,8 +92,13 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
+                let invoiceNumber = getText('.invoice-title');
+                
+                // Extract only the number part from "FATURË 978/2025" → "978/2025"
+                invoiceNumber = invoiceNumber.replace(/FATURË\s*/i, '').trim();
+
                 return {
-                    invoiceNumber: getText('.invoice-title'),
+                    invoiceNumber,
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
                 };
