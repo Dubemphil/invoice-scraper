@@ -86,24 +86,25 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                // Extract "Pay deadline" dynamically
-                const payDeadline = (() => {
+                // Extract Pay Deadline and Invoice Type dynamically
+                const getDynamicText = (labelText) => {
                     const labels = document.querySelectorAll('label');
                     for (let label of labels) {
-                        if (label.innerText.includes("Pay deadline")) {
+                        if (label.innerText.includes(labelText)) {
                             const valueElement = label.nextElementSibling;
                             return valueElement ? valueElement.innerText.trim() : 'N/A';
                         }
                     }
                     return 'N/A';
-                })();
+                };
 
                 return {
-                    taskNumber: getText('.invoice-title'),  // Invoice title (Invoice 978/2025)
-                    invoiceNumber: getText('.invoice-title'),  // Same as task number
+                    taskNumber: getText('.invoice-title'),  
+                    invoiceNumber: getText('.invoice-title'),  
                     businessName: getText('.invoice-basic-info--business-name'),
                     grandTotal: getText('.invoice-amount h1 strong'),
-                    payDeadline: payDeadline // ✅ Fixed extraction
+                    invoiceType: getDynamicText('Invoice type'), // ✅ Extracts Invoice Type
+                    payDeadline: getDynamicText('Pay deadline') // ✅ Extracts Pay Deadline
                 };
             });
 
@@ -130,7 +131,8 @@ app.get('/scrape', async (req, res) => {
                     invoiceData.invoiceNumber,
                     invoiceData.businessName,
                     invoiceData.grandTotal,
-                    invoiceData.payDeadline,
+                    invoiceData.invoiceType,  // ✅ Added Invoice Type
+                    invoiceData.payDeadline,  // ✅ Added Pay Deadline
                     ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
                 ]
             ];
