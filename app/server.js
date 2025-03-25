@@ -90,29 +90,10 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                // Extract Only Invoice Number
-                const invoiceNumber = (() => {
-                    const fullText = getText('.invoice-title'); // Example: "Invoice 978/2025"
-                    const match = fullText.match(/\d+\/\d+/); // Extracts "978/2025"
-                    return match ? match[0] : 'N/A';
-                })();
-
-                // Extract Invoice Type & Pay Deadline using nth-child
-                const extractFromIndex = (index) => {
-                    const groups = [...document.querySelectorAll('.form-group.form-column')];
-                    if (groups.length >= index) {
-                        const value = groups[index - 1].querySelector('p');
-                        return value ? value.innerText.trim() : 'N/A';
-                    }
-                    return 'N/A';
-                };
-
                 return {
-                    invoiceNumber: invoiceNumber,  
+                    invoiceNumber: getText('.invoice-title')?.match(/\d+\/\d+/)?.[0] || 'N/A',
                     grandTotal: getText('.invoice-amount h1 strong'),
-                    businessName: getText('.invoice-basic-info--business-name'),
-                    invoiceType: extractFromIndex(5),  // ✅ Fixed Invoice Type extraction
-                    payDeadline: extractFromIndex(8)   // ✅ Fixed Pay Deadline extraction
+                    businessName: getText('.invoice-basic-info--business-name')
                 };
             });
 
@@ -123,10 +104,10 @@ app.get('/scrape', async (req, res) => {
 
             // Extract items list
             const items = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map((item, index) => ({
-                    name: item.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
-                    ppUnit: item.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
-                    tPrice: item.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
+                return Array.from(document.querySelectorAll('.invoice-items-list > ul > li')).map(item => ({
+                    name: item.querySelector('.invoice-item-title')?.innerText.trim() || 'N/A',
+                    ppUnit: item.querySelector('.invoice-item-unit-price')?.innerText.trim() || 'N/A',
+                    tPrice: item.querySelector('.invoice-item-price')?.innerText.trim() || 'N/A'
                 }));
             });
 
@@ -138,8 +119,6 @@ app.get('/scrape', async (req, res) => {
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
                     invoiceData.businessName,
-                    invoiceData.invoiceType,  // ✅ Fixed Invoice Type
-                    invoiceData.payDeadline,  // ✅ Fixed Pay Deadline
                     ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
                 ]
             ];
