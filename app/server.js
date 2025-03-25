@@ -80,10 +80,10 @@ app.get('/scrape', async (req, res) => {
                 };
                 return {
                     taskNumber: getText('.invoice-header h1'),
-                    invoiceNumber: getText('.invoice-number'),
-                    businessName: getText('.business-name'),
-                    grandTotal: getText('.grand-total'),
-                    payDeadline: getText('.pay-deadline')
+                    invoiceNumber: getText('.invoice-number') || 'N/A',
+                    businessName: getText('.business-name') || 'N/A',
+                    grandTotal: getText('.grand-total') || 'N/A',
+                    payDeadline: getText('.pay-deadline') || 'N/A'
                 };
             });
 
@@ -99,7 +99,6 @@ app.get('/scrape', async (req, res) => {
             // Prepare update values (Ensuring column A remains unchanged)
             const updateValues = [
                 [
-                    rows[rowIndex][0], // Keep column A unchanged
                     invoiceData.taskNumber,
                     invoiceData.invoiceNumber,
                     invoiceData.businessName,
@@ -111,7 +110,7 @@ app.get('/scrape', async (req, res) => {
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet1!B${rowIndex + 1}`, // Ensure updates start from column B
+                range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValues }
             });
