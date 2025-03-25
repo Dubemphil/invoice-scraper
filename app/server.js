@@ -47,12 +47,14 @@ app.get('/scrape', async (req, res) => {
         const rows = data.values;
         let extractedData = [];
 
-        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {  // Start from row 1 to skip headers
             const invoiceLink = rows[rowIndex][0];
             if (!invoiceLink || !/^https?:\/\//.test(invoiceLink)) {
                 console.warn(`⚠️ Skipping invalid URL: ${invoiceLink}`);
                 continue;
             }
+
+            console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
 
             try {
                 await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -61,9 +63,9 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            // Click 'Show all' button if present using querySelector
+            // Click 'Show all' button if present
             try {
-                const showAllButton = await page.$("button:has-text('Show all')");
+                const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
                 if (showAllButton) {
                     await showAllButton.click();
                     await page.waitForTimeout(2000);
@@ -78,14 +80,17 @@ app.get('/scrape', async (req, res) => {
                     const element = document.querySelector(selector);
                     return element ? element.innerText.trim() : 'N/A';
                 };
+
                 return {
                     taskNumber: getText('.invoice-header h1'),
                     invoiceNumber: getText('.invoice-number') || 'N/A',
                     businessName: getText('.business-name') || 'N/A',
-                    grandTotal: getText('.grand-total') || 'N/A',
+                    grandTotal: getText('.grand-total span') || 'N/A',  // Ensure correct selector
                     payDeadline: getText('.pay-deadline') || 'N/A'
                 };
             });
+
+            console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
 
             // Extract items list
             const items = await page.evaluate(() => {
@@ -96,7 +101,9 @@ app.get('/scrape', async (req, res) => {
                 }));
             });
 
-            // Prepare update values (Ensuring column A remains unchanged)
+            console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
+
+            // Prepare update values
             const updateValues = [
                 [
                     invoiceData.taskNumber,
@@ -108,6 +115,7 @@ app.get('/scrape', async (req, res) => {
                 ]
             ];
 
+            // Update spreadsheet
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
                 range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,
