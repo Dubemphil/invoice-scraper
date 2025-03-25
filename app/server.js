@@ -53,6 +53,8 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
+            console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
+
             try {
                 await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
             } catch (navError) {
@@ -62,18 +64,20 @@ app.get('/scrape', async (req, res) => {
 
             // Click 'Show all' button if present
             try {
-                const showAllButton = await page.$("button:has-text('Show all')");
-                if (showAllButton) {
-                    await showAllButton.click();
-                    await page.waitForTimeout(3000); // Wait for items to load
+                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
+                if (showAllButtons.length > 0) {
+                    console.log("✅ 'Show all' button found, clicking...");
+                    await showAllButtons[0].click();
+                    await page.waitForTimeout(5000); // Wait for items to load
+                } else {
+                    console.warn("⚠️ 'Show all' button not found.");
                 }
             } catch (clickError) {
                 console.error("⚠️ Error clicking 'Show all' button:", clickError);
             }
 
             // Ensure page is fully loaded before extraction
-            await page.waitForSelector('.invoice-header h1', { timeout: 5000 }).catch(() => console.warn("⏳ Invoice header not found"));
-            await new Promise(r => setTimeout(r, 3000)); // Extra wait time
+            await page.waitForTimeout(3000); // Extra wait time
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
@@ -82,17 +86,19 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                const data = {
+                return {
                     taskNumber: getText('.invoice-header h1') || getText('.task-number span'),
                     invoiceNumber: getText('.invoice-number span') || getText('.invoice-id span'),
                     businessName: getText('.business-name span') || getText('.company-name span'),
                     grandTotal: getText('.grand-total span') || getText('.total-amount span'),
                     payDeadline: getText('.pay-deadline span') || getText('.due-date span')
                 };
-
-                console.log("🟢 Extracted Invoice Data:", data);
-                return data;
             });
+
+            console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
+
+            // Ensure items are fully loaded before extraction
+            await page.waitForSelector('.invoice-items-list', { timeout: 5000 }).catch(() => console.warn("⏳ Items list not found"));
 
             // Extract items list
             const items = await page.evaluate(() => {
@@ -103,9 +109,9 @@ app.get('/scrape', async (req, res) => {
                 }));
             });
 
-            console.log("🟢 Extracted Items:", items);
+            console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
 
-            // Prepare update values (Ensuring column A remains unchanged)
+            // Prepare update values
             const updateValues = [
                 [
                     invoiceData.taskNumber,
