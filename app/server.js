@@ -47,8 +47,8 @@ app.get('/scrape', async (req, res) => {
         const rows = data.values;
         let extractedData = [];
 
-        for (const row of rows) {
-            const invoiceLink = row[0];
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            const invoiceLink = rows[rowIndex][0];
             if (!invoiceLink || !/^https?:\/\//.test(invoiceLink)) {
                 console.warn(`⚠️ Skipping invalid URL: ${invoiceLink}`);
                 continue;
@@ -74,7 +74,14 @@ app.get('/scrape', async (req, res) => {
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
-                const getText = (selector) => document.querySelector(selector)?.innerText.trim() || '';
+                const getText = (selector) => {
+                    const element = document.querySelector(selector);
+                    if (!element) {
+                        console.warn(`⚠️ Missing element: ${selector}`);
+                        return '';
+                    }
+                    return element.innerText.trim();
+                };
                 return {
                     taskNumber: getText('.invoice-header h1'),
                     grandTotal: getText('.grand-total'),
@@ -93,9 +100,10 @@ app.get('/scrape', async (req, res) => {
                 }));
             });
 
-            // Update Google Sheets
+            // Update Google Sheets starting from column B
             const updateValues = [
                 [
+                    '', // Keeping column A unchanged
                     invoiceData.taskNumber,
                     invoiceData.grandTotal,
                     invoiceData.invoiceNumber,
@@ -107,7 +115,7 @@ app.get('/scrape', async (req, res) => {
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet1!A${rows.indexOf(row) + 1}`,
+                range: `Sheet1!B${rowIndex + 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValues }
             });
