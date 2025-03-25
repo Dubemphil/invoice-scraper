@@ -36,11 +36,6 @@ app.get('/scrape', async (req, res) => {
         });
         const page = await browser.newPage();
 
-        // Set the browser to request English content
-        await page.setExtraHTTPHeaders({
-            'Accept-Language': 'en-US,en;q=0.9',
-        });
-
         // Load spreadsheet data
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
@@ -69,21 +64,24 @@ app.get('/scrape', async (req, res) => {
 
             // Scroll down to ensure full page is loaded
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
 
             // Click 'Show all' button if present
             try {
-                const showAllButton = await page.$x("//button[contains(text(), 'Show all')]");
-                if (showAllButton.length > 0) {
+                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
+                if (showAllButtons.length > 0) {
                     console.log("✅ 'Show all' button found, clicking...");
-                    await showAllButton[0].click();
-                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await showAllButtons[0].click();
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ Proper wait method
                 } else {
                     console.warn("⚠️ 'Show all' button not found.");
                 }
             } catch (clickError) {
                 console.error("⚠️ Error clicking 'Show all' button:", clickError);
             }
+
+            // Ensure page is fully loaded before extraction
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
@@ -92,15 +90,29 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                let invoiceNumber = getText('.invoice-title');
-                
-                // Extract only the number part from "FATURË 978/2025" → "978/2025"
-                invoiceNumber = invoiceNumber.replace(/FATURË\s*/i, '').trim();
+                // Extract Only Invoice Number
+                const invoiceNumber = (() => {
+                    const fullText = getText('.invoice-title'); // Example: "Invoice 978/2025"
+                    const match = fullText.match(/\d+\/\d+/); // Extracts "978/2025"
+                    return match ? match[0] : 'N/A';
+                })();
+
+                // Extract Invoice Type & Pay Deadline using nth-child
+                const extractFromIndex = (index) => {
+                    const groups = [...document.querySelectorAll('.form-group.form-column')];
+                    if (groups.length >= index) {
+                        const value = groups[index - 1].querySelector('p');
+                        return value ? value.innerText.trim() : 'N/A';
+                    }
+                    return 'N/A';
+                };
 
                 return {
-                    invoiceNumber,
+                    invoiceNumber: invoiceNumber,  
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
+                    invoiceType: extractFromIndex(5),  // ✅ Fixed Invoice Type extraction
+                    payDeadline: extractFromIndex(8)   // ✅ Fixed Pay Deadline extraction
                 };
             });
 
@@ -111,7 +123,7 @@ app.get('/scrape', async (req, res) => {
 
             // Extract items list
             const items = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map(item => ({
+                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map((item, index) => ({
                     name: item.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
                     ppUnit: item.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
                     tPrice: item.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
@@ -126,13 +138,15 @@ app.get('/scrape', async (req, res) => {
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
                     invoiceData.businessName,
-                    ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice]) // Store each item in new columns
+                    invoiceData.invoiceType,  // ✅ Fixed Invoice Type
+                    invoiceData.payDeadline,  // ✅ Fixed Pay Deadline
+                    ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
                 ]
             ];
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,  // Extending to fit multiple items
+                range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValues }
             });
