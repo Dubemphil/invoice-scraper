@@ -62,19 +62,19 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            // Click 'Show all' button if present
-            try {
-                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
-                if (showAllButtons.length > 0) {
-                    console.log("✅ 'Show all' button found, clicking...");
-                    await showAllButtons[0].click();
-                    await page.waitForTimeout(5000); // Wait for items to load
-                } else {
-                    console.warn("⚠️ 'Show all' button not found.");
-                }
-            } catch (clickError) {
-                console.error("⚠️ Error clicking 'Show all' button:", clickError);
-            }
+            // // Click 'Show all' button if present
+            // try {
+            //     const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
+            //     if (showAllButtons.length > 0) {
+            //         console.log("✅ 'Show all' button found, clicking...");
+            //         await showAllButtons[0].click();
+            //         await page.waitForTimeout(5000); // Wait for items to load
+            //     } else {
+            //         console.warn("⚠️ 'Show all' button not found.");
+            //     }
+            // } catch (clickError) {
+            //     console.error("⚠️ Error clicking 'Show all' button:", clickError);
+            // }
 
             // Ensure page is fully loaded before extraction
             await page.waitForTimeout(3000); // Extra wait time
