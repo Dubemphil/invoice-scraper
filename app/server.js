@@ -64,7 +64,7 @@ app.get('/scrape', async (req, res) => {
 
             // Scroll down to ensure full page is loaded
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await page.waitForTimeout(3000);
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Fix: Proper wait method
 
             // Click 'Show all' button if present
             try {
@@ -72,7 +72,7 @@ app.get('/scrape', async (req, res) => {
                 if (showAllButtons.length > 0) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButtons[0].click();
-                    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for items to load
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ Fix: Proper wait method
                 } else {
                     console.warn("⚠️ 'Show all' button not found.");
                 }
@@ -81,7 +81,7 @@ app.get('/scrape', async (req, res) => {
             }
 
             // Ensure page is fully loaded before extraction
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Extra wait time
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Fix: Proper wait method
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
