@@ -106,7 +106,7 @@ app.get('/scrape', async (req, res) => {
             // Extract items list
             const items = await page.evaluate(() => {
                 return Array.from(document.querySelectorAll('.invoice-items-list > div')).map(item => ({
-                    name: item.querySelector('h2')?.innerText.trim() || 'N/A',
+                    name: item.querySelector('h2')?.innerText.trim(),
                     ppUnit: item.querySelector('.unit-price')?.innerText.trim() || 'N/A',
                     tPrice: item.querySelector('.total-price')?.innerText.trim() || 'N/A'
                 }));
