@@ -87,13 +87,12 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 // Extract Invoice Type & Pay Deadline dynamically
-                const getDynamicText = (labelText) => {
-                    const labels = document.querySelectorAll('label');
-                    for (let label of labels) {
-                        if (label.innerText.includes(labelText)) {
-                            const valueElement = label.nextElementSibling;
-                            return valueElement ? valueElement.innerText.trim() : 'N/A';
-                        }
+                const extractFromLabel = (labelText) => {
+                    const labels = [...document.querySelectorAll('label')];
+                    const label = labels.find(label => label.innerText.includes(labelText));
+                    if (label) {
+                        const container = label.closest('.form-group'); 
+                        return container ? container.querySelector('p')?.innerText.trim() || 'N/A' : 'N/A';
                     }
                     return 'N/A';
                 };
@@ -102,8 +101,8 @@ app.get('/scrape', async (req, res) => {
                     invoiceNumber: getText('.invoice-title'),  
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
-                    invoiceType: getDynamicText('Invoice type'), // ✅ Extract Invoice Type
-                    payDeadline: getDynamicText('Pay deadline') // ✅ Extract Pay Deadline
+                    invoiceType: extractFromLabel('Invoice type'), // ✅ Extract Invoice Type
+                    payDeadline: extractFromLabel('Pay deadline') // ✅ Extract Pay Deadline
                 };
             });
 
