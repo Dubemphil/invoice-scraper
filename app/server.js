@@ -86,7 +86,7 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                // Extract Pay Deadline and Invoice Type dynamically
+                // Extract Invoice Type & Pay Deadline dynamically
                 const getDynamicText = (labelText) => {
                     const labels = document.querySelectorAll('label');
                     for (let label of labels) {
@@ -99,12 +99,11 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 return {
-                    taskNumber: getText('.invoice-title'),  
                     invoiceNumber: getText('.invoice-title'),  
-                    businessName: getText('.invoice-basic-info--business-name'),
                     grandTotal: getText('.invoice-amount h1 strong'),
-                    invoiceType: getDynamicText('Invoice type'), // ✅ Extracts Invoice Type
-                    payDeadline: getDynamicText('Pay deadline') // ✅ Extracts Pay Deadline
+                    businessName: getText('.invoice-basic-info--business-name'),
+                    invoiceType: getDynamicText('Invoice type'), // ✅ Extract Invoice Type
+                    payDeadline: getDynamicText('Pay deadline') // ✅ Extract Pay Deadline
                 };
             });
 
@@ -115,7 +114,7 @@ app.get('/scrape', async (req, res) => {
 
             // Extract items list
             const items = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map(item => ({
+                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map((item, index) => ({
                     name: item.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
                     ppUnit: item.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
                     tPrice: item.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
@@ -127,10 +126,9 @@ app.get('/scrape', async (req, res) => {
             // Prepare update values
             const updateValues = [
                 [
-                    invoiceData.taskNumber,
                     invoiceData.invoiceNumber,
-                    invoiceData.businessName,
                     invoiceData.grandTotal,
+                    invoiceData.businessName,
                     invoiceData.invoiceType,  // ✅ Added Invoice Type
                     invoiceData.payDeadline,  // ✅ Added Pay Deadline
                     ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
