@@ -36,11 +36,6 @@ app.get('/scrape', async (req, res) => {
         });
         const page = await browser.newPage();
 
-        // Set the browser to request English content
-        await page.setExtraHTTPHeaders({
-            'Accept-Language': 'en-US,en;q=0.9',
-        });
-
         // Load spreadsheet data
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
@@ -65,6 +60,27 @@ app.get('/scrape', async (req, res) => {
             } catch (navError) {
                 console.error(`❌ Failed to navigate to ${invoiceLink}:`, navError);
                 continue;
+            }
+
+            // Switch language to English
+            try {
+                await page.waitForSelector('button[aria-haspopup="listbox"]', { timeout: 5000 });
+                await page.click('button[aria-haspopup="listbox"]'); // Open language dropdown
+
+                await page.waitForSelector('li[role="option"]'); // Wait for options to load
+                const options = await page.$$('li[role="option"]');
+
+                for (let option of options) {
+                    const text = await page.evaluate(el => el.innerText.trim(), option);
+                    if (text.toLowerCase().includes("anglisht")) {
+                        await option.click();
+                        console.log("✅ Switched language to English.");
+                        await page.waitForTimeout(3000); // Wait for content to reload
+                        break;
+                    }
+                }
+            } catch (langError) {
+                console.error("⚠️ Language switch failed:", langError);
             }
 
             // Scroll down to ensure full page is loaded
@@ -93,9 +109,10 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 let invoiceNumber = getText('.invoice-title');
-                
-                // Extract only the number part from "FATURË 978/2025" → "978/2025"
+
+                // Extract only the number part (remove "FATURË" and special characters after the number)
                 invoiceNumber = invoiceNumber.replace(/FATURË\s*/i, '').trim();
+                invoiceNumber = invoiceNumber.split('/')[0].trim(); // Extract only the first number before "/"
 
                 return {
                     invoiceNumber,
