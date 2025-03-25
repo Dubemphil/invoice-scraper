@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 8080;
 
 app.get('/scrape', async (req, res) => {
     try {
-        const browser = await puppeteer.launch({ 
+        const browser = await puppeteer.launch({
             headless: true,
             ignoreHTTPSErrors: true,
             args: [
@@ -56,32 +56,26 @@ app.get('/scrape', async (req, res) => {
             console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
 
             try {
-                await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
+                await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 60000 });
             } catch (navError) {
                 console.error(`❌ Failed to navigate to ${invoiceLink}:`, navError);
                 continue;
             }
 
-            // Scroll down to ensure full page is loaded
-            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
+            // Ensure page is fully loaded
+            await page.waitForTimeout(3000);
 
             // Click 'Show all' button if present
             try {
-                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
-                if (showAllButtons.length > 0) {
+                const showAllButton = await page.waitForXPath("//button[contains(text(), 'Show all')]", { timeout: 5000 });
+                if (showAllButton) {
                     console.log("✅ 'Show all' button found, clicking...");
-                    await showAllButtons[0].click();
-                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ Proper wait method
-                } else {
-                    console.warn("⚠️ 'Show all' button not found.");
+                    await showAllButton.click();
+                    await page.waitForTimeout(5000);
                 }
             } catch (clickError) {
-                console.error("⚠️ Error clicking 'Show all' button:", clickError);
+                console.warn("⚠️ 'Show all' button not found or failed to click:", clickError);
             }
-
-            // Ensure page is fully loaded before extraction
-            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
@@ -99,8 +93,13 @@ app.get('/scrape', async (req, res) => {
 
             console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
 
-            // Ensure items are fully loaded before extraction
-            await page.waitForSelector('.invoice-items-list', { timeout: 5000 }).catch(() => console.warn("⏳ Items list not found"));
+            // Ensure items are fully loaded
+            try {
+                await page.waitForSelector('.invoice-items-list', { timeout: 10000 });
+            } catch {
+                console.warn("⏳ Items list not found, skipping item extraction.");
+                continue;
+            }
 
             // Extract items list
             const items = await page.evaluate(() => {
