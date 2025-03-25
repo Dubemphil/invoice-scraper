@@ -62,6 +62,10 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
+            // Scroll down to ensure full page is loaded
+            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+            await page.waitForTimeout(3000);
+
             // Click 'Show all' button if present
             try {
                 const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
@@ -88,24 +92,30 @@ app.get('/scrape', async (req, res) => {
 
                 // Extract Only Invoice Number
                 const invoiceNumber = (() => {
-                    const fullText = getText('.invoice-title'); // Example: "FATURË 978/2025"
+                    const fullText = getText('.invoice-title'); // Example: "Invoice 978/2025"
                     const match = fullText.match(/\d+\/\d+/); // Extracts "978/2025"
                     return match ? match[0] : 'N/A';
                 })();
 
                 // Extract Invoice Type & Pay Deadline dynamically
                 const extractFromLabel = (labelText) => {
-                    const label = [...document.querySelectorAll('.form-group label')]
-                        .find(label => label.innerText.trim().toLowerCase() === labelText.toLowerCase());
-                    return label ? label.nextElementSibling?.innerText.trim() || 'N/A' : 'N/A';
+                    const labels = [...document.querySelectorAll('.form-group.form-column')];
+                    for (const group of labels) {
+                        const label = group.querySelector('label');
+                        if (label && label.innerText.trim().toLowerCase() === labelText.toLowerCase()) {
+                            const value = group.querySelector('p');
+                            return value ? value.innerText.trim() : 'N/A';
+                        }
+                    }
+                    return 'N/A';
                 };
 
                 return {
                     invoiceNumber: invoiceNumber,  
                     grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
-                    invoiceType: extractFromLabel('Invoice type:'), // ✅ Corrected Invoice Type Extraction
-                    payDeadline: extractFromLabel('Pay deadline:') // ✅ Corrected Pay Deadline Extraction
+                    invoiceType: extractFromLabel('Invoice type:'), // ✅ Now extracts correctly
+                    payDeadline: extractFromLabel('Pay deadline:') // ✅ Now extracts correctly
                 };
             });
 
@@ -131,8 +141,8 @@ app.get('/scrape', async (req, res) => {
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
                     invoiceData.businessName,
-                    invoiceData.invoiceType,  // ✅ Added Invoice Type
-                    invoiceData.payDeadline,  // ✅ Added Pay Deadline
+                    invoiceData.invoiceType,  // ✅ Fixed Invoice Type
+                    invoiceData.payDeadline,  // ✅ Fixed Pay Deadline
                     ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
                 ]
             ];
