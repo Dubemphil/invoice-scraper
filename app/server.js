@@ -62,39 +62,36 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            // // Click 'Show all' button if present
-            // try {
-            //     const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
-            //     if (showAllButtons.length > 0) {
-            //         console.log("✅ 'Show all' button found, clicking...");
-            //         await showAllButtons[0].click();
-            //         await page.waitForTimeout(5000); // Wait for items to load
-            //     } else {
-            //         console.warn("⚠️ 'Show all' button not found.");
-            //     }
-            // } catch (clickError) {
-            //     console.error("⚠️ Error clicking 'Show all' button:", clickError);
-            // }
+            // Click 'Show all' button if present
+            try {
+                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
+                if (showAllButtons.length > 0) {
+                    console.log("✅ 'Show all' button found, clicking...");
+                    await showAllButtons[0].click();
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for items to load
+                } else {
+                    console.warn("⚠️ 'Show all' button not found.");
+                }
+            } catch (clickError) {
+                console.error("⚠️ Error clicking 'Show all' button:", clickError);
+            }
 
             // Ensure page is fully loaded before extraction
-            await page.waitForTimeout(3000); // Extra wait time
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Extra wait time
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
-                const getText = (selectors) => {
-                    for (const selector of selectors) {
-                        const element = document.querySelector(selector);
-                        if (element) return element.innerText.trim();
-                    }
-                    return 'N/A';
+                const getText = (selector) => {
+                    const element = document.querySelector(selector);
+                    return element ? element.innerText.trim() : 'N/A';
                 };
 
                 return {
-                    taskNumber: getText(['.invoice-header h1', '.task-number span']),
-                    invoiceNumber: getText(['.invoice-number span', '.invoice-id span']),
-                    businessName: getText(['.business-name span', '.company-name span']),
-                    grandTotal: getText(['.grand-total span', '.total-amount span']),
-                    payDeadline: getText(['.pay-deadline span', '.due-date span'])
+                    taskNumber: getText('.invoice-title'),  // Invoice title (Invoice 978/2025)
+                    invoiceNumber: getText('.invoice-title'),  // Same as task number
+                    businessName: getText('.invoice-basic-info--business-name'),
+                    grandTotal: getText('.invoice-amount h1 strong'),
+                    payDeadline: getText('label:contains("Pay deadline") + p') // Fetch Pay Deadline
                 };
             });
 
@@ -106,9 +103,9 @@ app.get('/scrape', async (req, res) => {
             // Extract items list
             const items = await page.evaluate(() => {
                 return Array.from(document.querySelectorAll('.invoice-items-list > div')).map(item => ({
-                    name: item.querySelector('h2')?.innerText.trim(),
-                    ppUnit: item.querySelector('.unit-price')?.innerText.trim() || 'N/A',
-                    tPrice: item.querySelector('.total-price')?.innerText.trim() || 'N/A'
+                    name: item.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
+                    ppUnit: item.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
+                    tPrice: item.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
                 }));
             });
 
