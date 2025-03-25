@@ -2,7 +2,6 @@ const express = require('express');
 const { google } = require('googleapis');
 const puppeteer = require('puppeteer');
 const dotenv = require('dotenv');
-const path = require('path');
 
 dotenv.config();
 
@@ -27,17 +26,10 @@ app.get('/scrape', async (req, res) => {
         const browser = await puppeteer.launch({ 
             headless: true,
             ignoreHTTPSErrors: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-gpu',
-                '--disable-dev-shm-usage',
-                '--disable-software-rasterizer'
-            ]
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
 
-        // Load spreadsheet data
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
             spreadsheetId: sheetId,
@@ -47,7 +39,7 @@ app.get('/scrape', async (req, res) => {
         const rows = data.values;
         let extractedData = [];
 
-        for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {  // Start from row 1 to skip headers
+        for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {  
             const invoiceLink = rows[rowIndex][0];
             if (!invoiceLink || !/^https?:\/\//.test(invoiceLink)) {
                 console.warn(`⚠️ Skipping invalid URL: ${invoiceLink}`);
@@ -63,6 +55,9 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
+            // Ensure the page loads fully
+            await page.waitForTimeout(2000);
+
             // Click 'Show all' button if present
             try {
                 const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
@@ -74,7 +69,7 @@ app.get('/scrape', async (req, res) => {
                 console.error("⚠️ Error clicking 'Show all' button:", clickError);
             }
 
-            // Extract invoice details
+            // Extract invoice details with improved selectors
             const invoiceData = await page.evaluate(() => {
                 const getText = (selector) => {
                     const element = document.querySelector(selector);
@@ -82,11 +77,11 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 return {
-                    taskNumber: getText('.invoice-header h1'),
-                    invoiceNumber: getText('.invoice-number') || 'N/A',
-                    businessName: getText('.business-name') || 'N/A',
-                    grandTotal: getText('.grand-total span') || 'N/A',  // Ensure correct selector
-                    payDeadline: getText('.pay-deadline') || 'N/A'
+                    taskNumber: getText('.invoice-header h1') || getText('.task-number span'),
+                    invoiceNumber: getText('.invoice-number span') || getText('.invoice-id span'),
+                    businessName: getText('.business-name span') || getText('.company-name span'),
+                    grandTotal: getText('.grand-total span') || getText('.total-amount span'),
+                    payDeadline: getText('.pay-deadline span') || getText('.due-date span')
                 };
             });
 
@@ -95,9 +90,9 @@ app.get('/scrape', async (req, res) => {
             // Extract items list
             const items = await page.evaluate(() => {
                 return Array.from(document.querySelectorAll('.invoice-items-list > div')).map(item => ({
-                    name: item.querySelector('h2')?.innerText.trim() || 'N/A',
-                    ppUnit: item.querySelector('.unit-price')?.innerText.trim() || 'N/A',
-                    tPrice: item.querySelector('.total-price')?.innerText.trim() || 'N/A'
+                    name: item.querySelector('h2 span')?.innerText.trim() || 'N/A',
+                    ppUnit: item.querySelector('.unit-price span')?.innerText.trim() || 'N/A',
+                    tPrice: item.querySelector('.total-price span')?.innerText.trim() || 'N/A'
                 }));
             });
 
