@@ -56,10 +56,10 @@ app.get('/scrape', async (req, res) => {
 
             await page.goto(invoiceLink, { waitUntil: 'networkidle2' });
 
-            // Click 'Show all' if present
-            const showAllSelector = 'button:has-text("Show all")';
-            if (await page.$(showAllSelector)) {
-                await page.click(showAllSelector);
+            // Click 'Show all' if present using XPath
+            const [showAllButton] = await page.$x("//button[contains(text(), 'Show all')]");
+            if (showAllButton) {
+                await showAllButton.click();
                 await page.waitForTimeout(2000);
             }
 
