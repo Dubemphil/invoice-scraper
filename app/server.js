@@ -49,7 +49,10 @@ app.get('/scrape', async (req, res) => {
 
         for (const row of rows) {
             const invoiceLink = row[0];
-            if (!invoiceLink) continue;
+            if (!invoiceLink || !/^https?:\/\//.test(invoiceLink)) {
+                console.warn(`⚠️ Skipping invalid URL: ${invoiceLink}`);
+                continue;
+            }
 
             await page.goto(invoiceLink, { waitUntil: 'networkidle2' });
 
