@@ -76,17 +76,13 @@ app.get('/scrape', async (req, res) => {
             const invoiceData = await page.evaluate(() => {
                 const getText = (selector) => {
                     const element = document.querySelector(selector);
-                    if (!element) {
-                        console.warn(`⚠️ Missing element: ${selector}`);
-                        return '';
-                    }
-                    return element.innerText.trim();
+                    return element ? element.innerText.trim() : '';
                 };
                 return {
                     taskNumber: getText('.invoice-header h1'),
-                    grandTotal: getText('.grand-total'),
                     invoiceNumber: getText('.invoice-number'),
                     businessName: getText('.business-name'),
+                    grandTotal: getText('.grand-total'),
                     payDeadline: getText('.pay-deadline')
                 };
             });
@@ -100,22 +96,22 @@ app.get('/scrape', async (req, res) => {
                 }));
             });
 
-            // Update Google Sheets starting from column B
+            // Prepare update values (Ensuring column A is untouched)
             const updateValues = [
                 [
-                    '', // Keeping column A unchanged
-                    invoiceData.taskNumber,
-                    invoiceData.grandTotal,
-                    invoiceData.invoiceNumber,
-                    invoiceData.businessName,
-                    invoiceData.payDeadline,
-                    ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
+                    rows[rowIndex][0], // Keeping column A unchanged
+                    invoiceData.taskNumber || 'N/A',
+                    invoiceData.invoiceNumber || 'N/A',
+                    invoiceData.businessName || 'N/A',
+                    invoiceData.grandTotal || 'N/A',
+                    invoiceData.payDeadline || 'N/A',
+                    ...items.flatMap(item => [item.name || 'N/A', item.ppUnit || 'N/A', item.tPrice || 'N/A'])
                 ]
             ];
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet1!B${rowIndex + 1}`,
+                range: `Sheet1!A${rowIndex + 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValues }
             });
