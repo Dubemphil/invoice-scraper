@@ -82,12 +82,16 @@ app.get('/scrape', async (req, res) => {
                     return match ? match[0] : 'N/A';
                 };
 
+                const translateInvoiceType = (text) => {
+                    return text === 'Faturë pa para në dorë' ? 'Non-cash invoice' : text;
+                };
+
                 return {
                     businessName: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/ul/li[1]'),
                     invoiceNumber: extractInvoiceNumber('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4'),
                     grandTotal: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/h1'),
                     vat: extractVAT('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
-                    invoiceType: getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
+                    invoiceType: translateInvoiceType(getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p'))
                 };
             });
 
