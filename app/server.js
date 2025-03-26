@@ -64,7 +64,7 @@ app.get('/scrape', async (req, res) => {
 
             // Scroll down to ensure full page is loaded
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Click 'Show all' button if present
             try {
@@ -72,16 +72,14 @@ app.get('/scrape', async (req, res) => {
                 if (showAllButtons.length > 0) {
                     console.log("✅ 'Show all' button found, clicking...");
                     await showAllButtons[0].click();
-                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ Proper wait method
-                } else {
-                    console.warn("⚠️ 'Show all' button not found.");
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                 }
             } catch (clickError) {
                 console.error("⚠️ Error clicking 'Show all' button:", clickError);
             }
 
             // Ensure page is fully loaded before extraction
-            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Extract invoice details
             const invoiceData = await page.evaluate(() => {
@@ -90,29 +88,17 @@ app.get('/scrape', async (req, res) => {
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                // Extract Only Invoice Number
                 const invoiceNumber = (() => {
-                    const fullText = getText('.invoice-title'); // Example: "Invoice 978/2025"
-                    const match = fullText.match(/\d+\/\d+/); // Extracts "978/2025"
+                    const fullText = getText('.invoice-title');
+                    const match = fullText.match(/\d+\/\d+/);
                     return match ? match[0] : 'N/A';
                 })();
 
-                // Extract Invoice Type & Pay Deadline using nth-child
-                const extractFromIndex = (index) => {
-                    const groups = [...document.querySelectorAll('.form-group.form-column')];
-                    if (groups.length >= index) {
-                        const value = groups[index - 1].querySelector('p');
-                        return value ? value.innerText.trim() : 'N/A';
-                    }
-                    return 'N/A';
-                };
-
                 return {
-                    invoiceNumber: invoiceNumber,  
-                    grandTotal: getText('.invoice-amount h1 strong'),
                     businessName: getText('.invoice-basic-info--business-name'),
-                    invoiceType: extractFromIndex(5),  // ✅ Fixed Invoice Type extraction
-                    payDeadline: extractFromIndex(8)   // ✅ Fixed Pay Deadline extraction
+                    invoiceNumber,
+                    grandTotal: getText('.invoice-amount h1 strong'),
+                    vat: getText('.invoice-vat')
                 };
             });
 
@@ -135,11 +121,10 @@ app.get('/scrape', async (req, res) => {
             // Prepare update values
             const updateValues = [
                 [
+                    invoiceData.businessName,
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
-                    invoiceData.businessName,
-                    invoiceData.invoiceType,  // ✅ Fixed Invoice Type
-                    invoiceData.payDeadline,  // ✅ Fixed Pay Deadline
+                    invoiceData.vat,
                     ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
                 ]
             ];
