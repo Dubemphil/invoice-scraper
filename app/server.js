@@ -76,12 +76,18 @@ app.get('/scrape', async (req, res) => {
                     return words.length > 2 ? words.slice(2).join(' ') : 'N/A';
                 };
 
+                const extractInvoiceNumber = (xpath) => {
+                    const fullText = getText(xpath);
+                    const match = fullText.match(/\d+/);
+                    return match ? match[0] : 'N/A';
+                };
+
                 return {
-                    businessName: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
-                    invoiceNumber: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[1]/strong'),
-                    grandTotal: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[3]/h1/strong'),
-                    vat: extractVAT('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
-                    invoiceType: getText('//html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
+                    businessName: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/ul/li[1]'),
+                    invoiceNumber: extractInvoiceNumber('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4'),
+                    grandTotal: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/h1'),
+                    vat: extractVAT('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
+                    invoiceType: getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
                 };
             });
 
