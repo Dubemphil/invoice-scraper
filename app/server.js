@@ -79,9 +79,9 @@ app.get('/scrape', async (req, res) => {
                 return {
                     businessName: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
                     invoiceNumber: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[1]/strong'),
-                    grandTotal: getText('.invoice-amount h1 strong'),
-                    vat: extractVAT('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
-                    invoiceType: getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
+                    grandTotal: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[3]/h1/strong'),
+                    vat: extractVAT('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
+                    invoiceType: getText('//html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
                 };
             });
 
