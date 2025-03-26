@@ -72,8 +72,8 @@ app.get('/scrape', async (req, res) => {
 
                 const extractVAT = (xpath) => {
                     const fullText = getText(xpath);
-                    const words = fullText.split(' ');
-                    return words.length > 2 ? words.slice(2).join(' ') : 'N/A';
+                    const match = fullText.match(/\d+[.,]?\d*\s*LEK/);
+                    return match ? match[0] : 'N/A';
                 };
 
                 const extractInvoiceNumber = (xpath) => {
