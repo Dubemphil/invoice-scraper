@@ -78,7 +78,7 @@ app.get('/scrape', async (req, res) => {
 
                 const extractInvoiceNumber = (xpath) => {
                     const fullText = getText(xpath);
-                    const match = fullText.match(/\d+/);
+                    const match = fullText.match(/\d+\/\d+/);
                     return match ? match[0] : 'N/A';
                 };
 
