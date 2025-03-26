@@ -1,87 +1,165 @@
-// googlesheet.js
-const { GoogleSpreadsheet } = require('google-spreadsheet');
-const creds = require('./credentials.json'); // Google service account credentials
-
-async function accessSheet(sheetId) {
-    const doc = new GoogleSpreadsheet(sheetId);
-    await doc.useServiceAccountAuth(creds);
-    await doc.loadInfo();
-    return doc.sheetsByIndex[0];
-}
-
-async function updateSheet(sheet, rowIndex, data) {
-    const rows = await sheet.getRows();
-    Object.keys(data).forEach(key => {
-        rows[rowIndex][key] = data[key];
-    });
-    await rows[rowIndex].save();
-}
-
-module.exports = { accessSheet, updateSheet };
-
-// scraper.js
-const puppeteer = require('puppeteer');
-
-async function scrapeInvoice(url) {
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    
-    // Extract data
-    const invoiceData = await page.evaluate(() => {
-        const grandTotal = document.querySelector('selector-for-total')?.innerText || '';
-        const businessName = document.querySelector('selector-for-business-name')?.innerText || '';
-        const payDeadline = document.querySelector('selector-for-pay-deadline')?.innerText || '';
-        
-        const items = Array.from(document.querySelectorAll('selector-for-items')).map(item => {
-            return {
-                name: item.querySelector('selector-for-item-name')?.innerText || '',
-                pricePerUnit: item.querySelector('selector-for-item-price')?.innerText || '',
-                totalPrice: item.querySelector('selector-for-item-total')?.innerText || ''
-            };
-        });
-        
-        return { grandTotal, businessName, payDeadline, items };
-    });
-
-    await browser.close();
-    return invoiceData;
-}
-
-module.exports = { scrapeInvoice };
-
-// server.js
 const express = require('express');
-const { accessSheet, updateSheet } = require('./googlesheet');
-const { scrapeInvoice } = require('./scraper');
+const { google } = require('googleapis');
+const puppeteer = require('puppeteer');
+const dotenv = require('dotenv');
 
+dotenv.config();
+
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+    console.error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
+    process.exit(1);
+}
+
+const credentials = JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf-8'));
+const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+google.options({ auth });
+
+const sheets = google.sheets('v4');
 const app = express();
-const PORT = process.env.PORT || 3000;
-const SHEET_ID = 'your_google_sheet_id';
+const PORT = process.env.PORT || 8080;
 
 app.get('/scrape', async (req, res) => {
     try {
-        const sheet = await accessSheet(SHEET_ID);
-        const rows = await sheet.getRows();
+        const browser = await puppeteer.launch({ 
+            headless: true,
+            ignoreHTTPSErrors: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--disable-software-rasterizer'
+            ]
+        });
+        const page = await browser.newPage();
 
-        for (let i = 0; i < rows.length; i++) {
-            if (!rows[i]['Grand Total']) { // Check if already scraped
-                const invoiceData = await scrapeInvoice(rows[i]['Invoice Link']);
-                const formattedData = {
-                    'Grand Total': invoiceData.grandTotal,
-                    'Business Name': invoiceData.businessName,
-                    'Pay Deadline': invoiceData.payDeadline,
-                    'Item A1': invoiceData.items[0]?.name || '',
-                    'Item A2': invoiceData.items[0]?.pricePerUnit || '',
-                    'Item A3': invoiceData.items[0]?.totalPrice || ''
-                };
-                await updateSheet(sheet, i, formattedData);
+        // Load spreadsheet data
+        const sheetId = process.env.GOOGLE_SHEET_ID;
+        const { data } = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: 'Sheet1!A:A',
+        });
+
+        const rows = data.values;
+        let extractedData = [];
+
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            const invoiceLink = rows[rowIndex][0];
+            if (!invoiceLink || !/^https?:\/\//.test(invoiceLink)) {
+                console.warn(`⚠️ Skipping invalid URL: ${invoiceLink}`);
+                continue;
             }
+
+            console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
+
+            try {
+                await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
+            } catch (navError) {
+                console.error(`❌ Failed to navigate to ${invoiceLink}:`, navError);
+                continue;
+            }
+
+            // Scroll down to ensure full page is loaded
+            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
+
+            // Click 'Show all' button if present
+            try {
+                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
+                if (showAllButtons.length > 0) {
+                    console.log("✅ 'Show all' button found, clicking...");
+                    await showAllButtons[0].click();
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // ✅ Proper wait method
+                } else {
+                    console.warn("⚠️ 'Show all' button not found.");
+                }
+            } catch (clickError) {
+                console.error("⚠️ Error clicking 'Show all' button:", clickError);
+            }
+
+            // Ensure page is fully loaded before extraction
+            await new Promise(resolve => setTimeout(resolve, 3000)); // ✅ Proper wait method
+
+            // Extract invoice details
+            const invoiceData = await page.evaluate(() => {
+                const getText = (selector) => {
+                    const element = document.querySelector(selector);
+                    return element ? element.innerText.trim() : 'N/A';
+                };
+
+                // Extract Only Invoice Number
+                const invoiceNumber = (() => {
+                    const fullText = getText('.invoice-title'); // Example: "Invoice 978/2025"
+                    const match = fullText.match(/\d+\/\d+/); // Extracts "978/2025"
+                    return match ? match[0] : 'N/A';
+                })();
+
+                // Extract Invoice Type & Pay Deadline using nth-child
+                const extractFromIndex = (index) => {
+                    const groups = [...document.querySelectorAll('.form-group.form-column')];
+                    if (groups.length >= index) {
+                        const value = groups[index - 1].querySelector('p');
+                        return value ? value.innerText.trim() : 'N/A';
+                    }
+                    return 'N/A';
+                };
+
+                return {
+                    invoiceNumber: invoiceNumber,  
+                    grandTotal: getText('.invoice-amount h1 strong'),
+                    businessName: getText('.invoice-basic-info--business-name'),
+                    invoiceType: extractFromIndex(5),  // ✅ Fixed Invoice Type extraction
+                    payDeadline: extractFromIndex(8)   // ✅ Fixed Pay Deadline extraction
+                };
+            });
+
+            console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
+
+            // Ensure items are fully loaded before extraction
+            await page.waitForSelector('.invoice-items-list', { timeout: 5000 }).catch(() => console.warn("⏳ Items list not found"));
+
+            // Extract items list
+            const items = await page.evaluate(() => {
+                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map((item, index) => ({
+                    name: item.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
+                    ppUnit: item.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
+                    tPrice: item.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
+                }));
+            });
+
+            console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
+
+            // Prepare update values
+            const updateValues = [
+                [
+                    invoiceData.invoiceNumber,
+                    invoiceData.grandTotal,
+                    invoiceData.businessName,
+                    invoiceData.invoiceType,  // ✅ Fixed Invoice Type
+                    invoiceData.payDeadline,  // ✅ Fixed Pay Deadline
+                    ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
+                ]
+            ];
+
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: sheetId,
+                range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,
+                valueInputOption: 'RAW',
+                resource: { values: updateValues }
+            });
+
+            extractedData.push({ invoiceData, items });
         }
 
-        res.send('Scraping and updating completed.');
+        await browser.close();
+        res.json({ success: true, message: "Scraping completed", data: extractedData });
     } catch (error) {
-        res.status(500).send('Error: ' + error.message);
+        console.error("❌ Error during scraping:", error);
+        res.status(500).json({ success: false, message: "Scraping failed", error: error.toString() });
     }
 });
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ Server running on port ${PORT}`));
