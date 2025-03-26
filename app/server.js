@@ -62,81 +62,49 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            // Scroll down to ensure full page is loaded
-            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // Click 'Show all' button if present
-            try {
-                const showAllButtons = await page.$x("//button[contains(text(), 'Show all')]");
-                if (showAllButtons.length > 0) {
-                    console.log("✅ 'Show all' button found, clicking...");
-                    await showAllButtons[0].click();
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                }
-            } catch (clickError) {
-                console.error("⚠️ Error clicking 'Show all' button:", clickError);
-            }
-
-            // Ensure page is fully loaded before extraction
-            await new Promise(resolve => setTimeout(resolve, 3000));
-
-            // Extract invoice details
             const invoiceData = await page.evaluate(() => {
-                const getText = (selector) => {
-                    const element = document.querySelector(selector);
+                const getText = (xpath) => {
+                    const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
                     return element ? element.innerText.trim() : 'N/A';
                 };
 
-                const invoiceNumber = (() => {
-                    const fullText = getText('.invoice-title');
-                    const match = fullText.match(/\d+\/\d+/);
-                    return match ? match[0] : 'N/A';
-                })();
+                const extractVAT = (xpath) => {
+                    const fullText = getText(xpath);
+                    const words = fullText.split(' ');
+                    return words.length > 2 ? words.slice(2).join(' ') : 'N/A';
+                };
 
                 return {
-                    businessName: getText('.invoice-basic-info--business-name'),
-                    invoiceNumber,
+                    businessName: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
+                    invoiceNumber: getText('//html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[1]/strong'),
                     grandTotal: getText('.invoice-amount h1 strong'),
-                    vat: getText('.invoice-vat')
+                    vat: extractVAT('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
+                    invoiceType: getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
                 };
             });
 
             console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
 
-            // Ensure items are fully loaded before extraction
-            await page.waitForSelector('.invoice-items-list', { timeout: 5000 }).catch(() => console.warn("⏳ Items list not found"));
-
-            // Extract items list
-            const items = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('.invoice-items-list > div')).map((item, index) => ({
-                    name: item.querySelector('.invoice-item--title')?.innerText.trim() || 'N/A',
-                    ppUnit: item.querySelector('.invoice-item--unit-price')?.innerText.trim() || 'N/A',
-                    tPrice: item.querySelector('.invoice-item--price')?.innerText.trim() || 'N/A'
-                }));
-            });
-
-            console.log(`✅ Extracted Items for row ${rowIndex + 1}:`, items);
-
-            // Prepare update values
             const updateValues = [
                 [
                     invoiceData.businessName,
                     invoiceData.invoiceNumber,
                     invoiceData.grandTotal,
                     invoiceData.vat,
-                    ...items.flatMap(item => [item.name, item.ppUnit, item.tPrice])
+                    invoiceData.invoiceType
                 ]
             ];
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet1!B${rowIndex + 1}:Z${rowIndex + 1}`,
+                range: `Sheet1!B${rowIndex + 1}:F${rowIndex + 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValues }
             });
 
-            extractedData.push({ invoiceData, items });
+            extractedData.push(invoiceData);
         }
 
         await browser.close();
