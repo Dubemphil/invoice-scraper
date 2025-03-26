@@ -36,6 +36,9 @@ app.get('/scrape', async (req, res) => {
         });
         const page = await browser.newPage();
 
+        // Set page language to English
+        await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+
         // Load spreadsheet data
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
@@ -83,7 +86,7 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 const translateInvoiceType = (text) => {
-                    return text === 'Faturë pa para në dorë' ? 'Non-cash invoice' : text;
+                    return text.includes('Faturë pa para në dorë') ? 'Non-cash invoice' : text;
                 };
 
                 return {
