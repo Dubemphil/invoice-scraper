@@ -2,6 +2,7 @@
   "name": "invoice-scraper",
   "version": "1.0.0",
   "dependencies": {
+    "@google-cloud/vision": "^5.1.0",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "googleapis": "^122.0.0",
