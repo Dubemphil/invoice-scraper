@@ -3,13 +3,10 @@ const { google } = require('googleapis');
 const puppeteer = require('puppeteer');
 const vision = require('@google-cloud/vision');
 const dotenv = require('dotenv');
+const open = require('open');
+const readline = require('readline');
 
 dotenv.config();
-
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
-    console.error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
-    process.exit(1);
-}
 
 const credentials = JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf-8'));
 const auth = new google.auth.GoogleAuth({
@@ -23,7 +20,25 @@ const drive = google.drive({ version: 'v3', auth });
 const visionClient = new vision.ImageAnnotatorClient({ credentials });
 const app = express();
 const PORT = process.env.PORT || 8080;
-const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+async function getDriveFolderId() {
+    const { data } = await drive.files.list({
+        q: "mimeType='application/vnd.google-apps.folder'",
+        fields: 'files(id, name)',
+    });
+
+    console.log("Available Folders:");
+    data.files.forEach((file, index) => console.log(`${index + 1}. ${file.name} (${file.id})`));
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise((resolve) => {
+        rl.question('Enter the number of the folder you want to select: ', (answer) => {
+            const selectedFolder = data.files[parseInt(answer) - 1];
+            rl.close();
+            resolve(selectedFolder ? selectedFolder.id : null);
+        });
+    });
+}
 
 async function createSpreadsheet() {
     const title = "Extracted Links";
@@ -45,7 +60,7 @@ async function createSpreadsheet() {
     return sheetId;
 }
 
-async function extractLinksFromImages(sheetId) {
+async function extractLinksFromImages(sheetId, folderId) {
     const { data } = await drive.files.list({
         q: `'${folderId}' in parents and mimeType contains 'image/'`,
         fields: 'files(id, name)',
@@ -116,8 +131,12 @@ async function scrapeInvoices(sheetId) {
 
 app.get('/start', async (req, res) => {
     try {
+        const folderId = await getDriveFolderId();
+        if (!folderId) {
+            return res.status(400).json({ success: false, message: "No folder selected" });
+        }
         let sheetId = await createSpreadsheet();
-        sheetId = await extractLinksFromImages(sheetId);
+        sheetId = await extractLinksFromImages(sheetId, folderId);
         await scrapeInvoices(sheetId);
         res.json({ success: true, message: "Process completed successfully", sheetId });
     } catch (error) {
