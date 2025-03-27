@@ -86,7 +86,9 @@ app.get('/scrape', async (req, res) => {
                 };
 
                 const translateInvoiceType = (text) => {
-                    return text.includes('Faturë pa para në dorë') ? 'Non-cash invoice' : text;
+                    if (text.includes('Faturë pa para në dorë')) return 'Non-cash invoice';
+                    if (text.includes('Faturë me para në dorë')) return 'Cash invoice';
+                    return text;
                 };
 
                 return {
