@@ -35,8 +35,11 @@ app.get('/scrape', async (req, res) => {
             ]
         });
         const page = await browser.newPage();
+
+        // Set page language to English
         await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
 
+        // Load spreadsheet data
         const sheetId = process.env.GOOGLE_SHEET_ID;
         const { data } = await sheets.spreadsheets.values.get({
             spreadsheetId: sheetId,
@@ -44,9 +47,7 @@ app.get('/scrape', async (req, res) => {
         });
 
         const rows = data.values;
-        let extractedData1 = [];
-        let extractedData2 = [];
-        let currentRowSheet3 = 2;
+        let extractedData = [];
 
         for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
             const invoiceLink = rows[rowIndex][0];
@@ -56,57 +57,73 @@ app.get('/scrape', async (req, res) => {
             }
 
             console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
+
             try {
                 await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
             } catch (navError) {
                 console.error(`❌ Failed to navigate to ${invoiceLink}:`, navError);
                 continue;
             }
+
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // Script 1 Extraction
-            const invoiceData1 = await page.evaluate(() => {
+            const invoiceData = await page.evaluate(() => {
                 const getText = (xpath) => {
                     const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
                     return element ? element.innerText.trim() : 'N/A';
                 };
+
+                const extractVAT = (xpath) => {
+                    const fullText = getText(xpath);
+                    const match = fullText.match(/\d+[.,]?\d*\s*LEK/);
+                    return match ? match[0] : 'N/A';
+                };
+
+                const extractInvoiceNumber = (xpath) => {
+                    const fullText = getText(xpath);
+                    const match = fullText.match(/\d+\/\d+/);
+                    return match ? match[0] : 'N/A';
+                };
+
+                const translateInvoiceType = (text) => {
+                    if (text.includes('Faturë pa para në dorë')) return 'Non-cash invoice';
+                    if (text.includes('Faturë me para në dorë')) return 'Cash invoice';
+                    return text;
+                };
+
                 return {
                     businessName: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/ul/li[1]'),
-                    invoiceNumber: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4'),
-                    grandTotal: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/h1')
+                    invoiceNumber: extractInvoiceNumber('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4'),
+                    grandTotal: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/h1'),
+                    vat: extractVAT('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
+                    invoiceType: translateInvoiceType(getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p'))
                 };
-            });
-            extractedData1.push(invoiceData1);
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: sheetId,
-                range: `Sheet2!A${rowIndex + 1}:C${rowIndex + 1}`,
-                valueInputOption: 'RAW',
-                resource: { values: [[invoiceData1.businessName, invoiceData1.invoiceNumber, invoiceData1.grandTotal]] }
             });
 
-            // Script 2 Extraction
-            const invoiceData2 = await page.evaluate(() => {
-                const getText = (xpath) => {
-                    const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    return element ? element.innerText.trim().replace('TVSH', 'VAT') : 'N/A';
-                };
-                return {
-                    businessName: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/ul/li[1]'),
-                    invoiceNumber: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4')
-                };
-            });
-            extractedData2.push(invoiceData2);
+            console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
+
+            const updateValues = [
+                [
+                    invoiceData.businessName,
+                    invoiceData.invoiceNumber,
+                    invoiceData.grandTotal,
+                    invoiceData.vat,
+                    invoiceData.invoiceType
+                ]
+            ];
+
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet3!A${currentRowSheet3}:B${currentRowSheet3}`,
+                range: `Sheet1!B${rowIndex + 1}:F${rowIndex + 1}`,
                 valueInputOption: 'RAW',
-                resource: { values: [[invoiceData2.businessName, invoiceData2.invoiceNumber]] }
+                resource: { values: updateValues }
             });
-            currentRowSheet3++;
+
+            extractedData.push(invoiceData);
         }
 
         await browser.close();
-        res.json({ success: true, message: "Scraping completed", data: { extractedData1, extractedData2 } });
+        res.json({ success: true, message: "Scraping completed", data: extractedData });
     } catch (error) {
         console.error("❌ Error during scraping:", error);
         res.status(500).json({ success: false, message: "Scraping failed", error: error.toString() });
