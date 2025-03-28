@@ -42,6 +42,9 @@ COPY app/package.json app/package-lock.json ./
 # Clear npm cache to avoid installation issues
 RUN npm cache clean --force && npm install --omit=dev
 
+# Explicitly install Google Vision AI SDK
+RUN npm install @google-cloud/vision
+
 # Copy the application source code
 COPY app/. .
 
