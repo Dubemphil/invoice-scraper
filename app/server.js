@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const puppeteer = require('puppeteer');
 const vision = require('@google-cloud/vision');
 const dotenv = require('dotenv');
-const open = require('open');
+import open from 'open';
 const readline = require('readline');
 
 dotenv.config();
