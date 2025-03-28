@@ -1,10 +1,10 @@
-const express = require('express');
-const { google } = require('googleapis');
-const puppeteer = require('puppeteer');
-const vision = require('@google-cloud/vision');
-const dotenv = require('dotenv');
+import express from 'express';
+import { google } from 'googleapis';
+import puppeteer from 'puppeteer';
+import vision from '@google-cloud/vision';
+import dotenv from 'dotenv';
 import open from 'open';
-const readline = require('readline');
+import readline from 'readline';
 
 dotenv.config();
 
@@ -70,7 +70,7 @@ async function extractLinksFromImages(sheetId, folderId) {
     for (const file of data.files) {
         const [result] = await visionClient.textDetection(`https://drive.google.com/uc?id=${file.id}`);
         const detectedText = result.fullTextAnnotation ? result.fullTextAnnotation.text : '';
-        const urlMatch = detectedText.match(/https?:\/\/[\w\-._~:/?#@!$&'()*+,;=%]+/g);
+        const urlMatch = detectedText.match(/https?:\/\/[\w\-._~:\/?#@!$&'()*+,;=%]+/g);
         if (urlMatch) extractedLinks.push([urlMatch[0]]);
     }
 
@@ -95,7 +95,6 @@ async function scrapeInvoices(sheetId) {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
     let currentRowSheet2 = 2;
-    let currentRowSheet3 = 2;
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
         const invoiceLink = rows[rowIndex][0];
