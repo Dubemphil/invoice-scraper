@@ -103,7 +103,7 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            const updateValuesSheet2 = invoiceData.map(item => [null, null, ...item]);
+            const updateValuesSheet2 = invoiceData.map(item => item.slice(0, 6)); // Ensure exactly 6 columns
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
