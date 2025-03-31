@@ -100,16 +100,16 @@ app.get('/scrape', async (req, res) => {
                     while (currentNode) {
                         const itemParts = currentNode.innerText.trim().replace('TVSH', 'VAT').split('\n');
                         tempRow.push(...itemParts);
-                        if (tempRow.length >= 6) {
-                            items.push(tempRow.slice(0, 6));
-                            tempRow = tempRow.slice(6);
+                        if (tempRow.length >= 4) {
+                            items.push(tempRow.slice(0, 4));
+                            tempRow = tempRow.slice(4);
                         }
                         currentNode = itemNodes.iterateNext();
                     }
                     if (tempRow.length > 0) {
-                        items.push(tempRow.concat(Array(6 - tempRow.length).fill('')));
+                        items.push(tempRow.concat(Array(4 - tempRow.length).fill('')));
                     }
-                    return items.length > 0 ? items : [['N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A']];
+                    return items;
                 };
 
                 return {
@@ -124,19 +124,14 @@ app.get('/scrape', async (req, res) => {
 
             console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
 
-            if (invoiceData.businessName === 'N/A' && invoiceData.invoiceNumber === 'N/A') {
-                console.warn(`⚠️ No valid data extracted from ${invoiceLink}`);
-                continue;
-            }
-
             let updateValuesSheet2 = [];
             for (let i = 0; i < invoiceData.items.length; i += 2) {
                 updateValuesSheet2.push([
                     invoiceData.businessName,
                     invoiceData.invoiceNumber,
                     ...invoiceData.items[i],
-                    ...(invoiceData.items[i + 1] || ['', '', ''])
-                ]);
+                    ...(invoiceData.items[i + 1] || ['', '', '', ''])
+                ].slice(0, 6));
             }
 
             await sheets.spreadsheets.values.update({
