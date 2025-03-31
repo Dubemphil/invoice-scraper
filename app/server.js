@@ -107,12 +107,11 @@ app.get('/scrape', async (req, res) => {
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet2!A${currentRowSheet2}:H${currentRowSheet2 + updateValuesSheet2.length - 1}`,
+                range: `Sheet2!A2:H3`,
                 valueInputOption: 'RAW',
-                resource: { values: updateValuesSheet2 }
+                resource: { values: [["Test Link", new Date().toISOString(), "Item", "100", "200", "2", "Detail", "10%"]] }
             });
-            currentRowSheet2 += updateValuesSheet2.length;
-
+            
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
                 range: `Sheet3!A${currentRowSheet3}:F${currentRowSheet3 + invoiceData.length - 1}`,
