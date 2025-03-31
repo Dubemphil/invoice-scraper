@@ -46,7 +46,6 @@ app.get('/scrape', async (req, res) => {
         const rows = data.values;
         let extractedData = [];
         let currentRowSheet2 = 2;
-        let currentRowSheet3 = 2;
 
         for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
             const invoiceLink = rows[rowIndex][0];
@@ -73,11 +72,11 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await page.waitForSelector('li', { timeout: 10000 });
 
             const invoiceData = await page.evaluate(() => {
                 const items = [];
-                const itemBlocks = document.querySelectorAll(".invoice-items-list div");
+                const itemBlocks = document.querySelectorAll("li");
 
                 itemBlocks.forEach((block) => {
                     const parts = block.innerText.trim().split('\n');
@@ -93,6 +92,7 @@ app.get('/scrape', async (req, res) => {
                     items.push([itemName, unitPrice, totalPrice, quantity, extraDetail, vat]);
                 });
 
+                console.log("Extracted Items:", items);
                 return items;
             });
 
