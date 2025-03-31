@@ -46,6 +46,7 @@ app.get('/scrape', async (req, res) => {
         const rows = data.values;
         let extractedData = [];
         let currentRowSheet2 = 2;
+        let currentRowSheet3 = 2;
 
         for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
             const invoiceLink = rows[rowIndex][0];
@@ -72,11 +73,11 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            await page.waitForSelector('li', { timeout: 10000 });
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
             const invoiceData = await page.evaluate(() => {
                 const items = [];
-                const itemBlocks = document.querySelectorAll("li");
+                const itemBlocks = document.querySelectorAll(".invoice-items-list div");
 
                 itemBlocks.forEach((block) => {
                     const parts = block.innerText.trim().split('\n');
@@ -92,7 +93,6 @@ app.get('/scrape', async (req, res) => {
                     items.push([itemName, unitPrice, totalPrice, quantity, extraDetail, vat]);
                 });
 
-                console.log("Extracted Items:", items);
                 return items;
             });
 
@@ -103,15 +103,23 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            const updateValuesSheet2 = invoiceData.map(item => item.slice(0, 6)); // Ensure exactly 6 columns
+            const updateValuesSheet2 = invoiceData.map(item => [invoiceLink, new Date().toISOString(), ...item]);
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet2!C${currentRowSheet2}:H${currentRowSheet2 + updateValuesSheet2.length - 1}`,
+                range: `Sheet2!A${currentRowSheet2}:H${currentRowSheet2 + updateValuesSheet2.length - 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValuesSheet2 }
             });
             currentRowSheet2 += updateValuesSheet2.length;
+
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: sheetId,
+                range: `Sheet3!A${currentRowSheet3}:F${currentRowSheet3 + invoiceData.length - 1}`,
+                valueInputOption: 'RAW',
+                resource: { values: invoiceData }
+            });
+            currentRowSheet3 += invoiceData.length;
 
             extractedData.push(invoiceData);
         }
