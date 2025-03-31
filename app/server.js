@@ -58,7 +58,7 @@ app.get('/scrape', async (req, res) => {
             console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
 
             let navigationSuccess = false;
-            for (let attempt = 1; attempt <= 3; attempt++) { // Retry mechanism
+            for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
                     await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
                     navigationSuccess = true;
@@ -96,16 +96,20 @@ app.get('/scrape', async (req, res) => {
                     
                     const itemNodes = document.evaluate("/html/body/app-root/app-verify-invoice/div/section[3]/div/ul/li/ul/li", document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
                     let currentNode = itemNodes.iterateNext();
+                    let tempRow = [];
                     while (currentNode) {
                         const itemParts = currentNode.innerText.trim().replace('TVSH', 'VAT').split('\n');
-                        if (itemParts.length >= 3) {
-                            items.push([itemParts[0], itemParts[1], itemParts[2]]);
-                        } else {
-                            items.push([itemParts[0], itemParts[1] || '', '']);
+                        tempRow.push(...itemParts);
+                        if (tempRow.length >= 6) {
+                            items.push(tempRow.slice(0, 6));
+                            tempRow = tempRow.slice(6);
                         }
                         currentNode = itemNodes.iterateNext();
                     }
-                    return items.length > 0 ? items : [['N/A', 'N/A', 'N/A']];
+                    if (tempRow.length > 0) {
+                        items.push(tempRow.concat(Array(6 - tempRow.length).fill('')));
+                    }
+                    return items.length > 0 ? items : [['N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A']];
                 };
 
                 return {
@@ -125,38 +129,23 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            // Update Sheet2 with invoice items
-            let updateValuesSheet2 = [[invoiceData.businessName, invoiceData.invoiceNumber, ...invoiceData.items[0] || ['', '', '']]];
-            for (let i = 1; i < invoiceData.items.length; i++) {
-                updateValuesSheet2.push([null, null, ...invoiceData.items[i]]);
+            let updateValuesSheet2 = [];
+            for (let i = 0; i < invoiceData.items.length; i += 2) {
+                updateValuesSheet2.push([
+                    invoiceData.businessName,
+                    invoiceData.invoiceNumber,
+                    ...invoiceData.items[i],
+                    ...(invoiceData.items[i + 1] || ['', '', ''])
+                ]);
             }
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet2!A${currentRowSheet2}:E${currentRowSheet2 + updateValuesSheet2.length - 1}`,
+                range: `Sheet2!A${currentRowSheet2}:F${currentRowSheet2 + updateValuesSheet2.length - 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValuesSheet2 }
             });
             currentRowSheet2 += updateValuesSheet2.length;
-
-            // Update Sheet3 with invoice summary
-            const updateValuesSheet3 = [[
-                invoiceData.businessName,
-                invoiceData.invoiceNumber,
-                invoiceData.grandTotal,
-                invoiceData.vat,
-                invoiceData.invoiceType
-            ]];
-
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: sheetId,
-                range: `Sheet3!A${currentRowSheet3}:E${currentRowSheet3}`,
-                valueInputOption: 'RAW',
-                resource: { values: updateValuesSheet3 }
-            });
-            currentRowSheet3++;
-
-            extractedData.push(invoiceData);
         }
 
         await browser.close();
