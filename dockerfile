@@ -44,7 +44,6 @@ RUN npm cache clean --force && npm install --omit=dev
 
 # Explicitly install Google Vision AI SDK and Open
 RUN npm install @google-cloud/vision
-RUN npm install open
 
 
 # Copy the application source code

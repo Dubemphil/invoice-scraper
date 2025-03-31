@@ -1,146 +1,169 @@
-import express from 'express';
-import { google } from 'googleapis';
-import puppeteer from 'puppeteer';
-import vision from '@google-cloud/vision';
-import dotenv from 'dotenv';
-import open from 'open';
-import readline from 'readline';
+const express = require('express');
+const { google } = require('googleapis');
+const puppeteer = require('puppeteer');
+const dotenv = require('dotenv');
 
 dotenv.config();
+
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+    console.error("❌ GOOGLE_APPLICATION_CREDENTIALS_BASE64 is not set.");
+    process.exit(1);
+}
 
 const credentials = JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf-8'));
 const auth = new google.auth.GoogleAuth({
     credentials,
-    scopes: ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets'],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 google.options({ auth });
 
 const sheets = google.sheets('v4');
-const drive = google.drive({ version: 'v3', auth });
-const visionClient = new vision.ImageAnnotatorClient({ credentials });
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-async function getDriveFolderId() {
-    const { data } = await drive.files.list({
-        q: "mimeType='application/vnd.google-apps.folder'",
-        fields: 'files(id, name)',
-    });
-
-    console.log("Available Folders:");
-    data.files.forEach((file, index) => console.log(`${index + 1}. ${file.name} (${file.id})`));
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise((resolve) => {
-        rl.question('Enter the number of the folder you want to select: ', (answer) => {
-            const selectedFolder = data.files[parseInt(answer) - 1];
-            rl.close();
-            resolve(selectedFolder ? selectedFolder.id : null);
-        });
-    });
-}
-
-async function createSpreadsheet() {
-    const title = "Extracted Links";
-    const response = await sheets.spreadsheets.create({
-        resource: { properties: { title } },
-    });
-    const sheetId = response.data.spreadsheetId;
-
-    await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: sheetId,
-        resource: {
-            requests: [
-                { addSheet: { properties: { title: "Sheet1" } } },
-                { addSheet: { properties: { title: "Sheet2" } } },
-                { addSheet: { properties: { title: "Sheet3" } } }
-            ]
-        }
-    });
-    return sheetId;
-}
-
-async function extractLinksFromImages(sheetId, folderId) {
-    const { data } = await drive.files.list({
-        q: `'${folderId}' in parents and mimeType contains 'image/'`,
-        fields: 'files(id, name)',
-    });
-
-    let extractedLinks = [];
-    for (const file of data.files) {
-        const [result] = await visionClient.textDetection(`https://drive.google.com/uc?id=${file.id}`);
-        const detectedText = result.fullTextAnnotation ? result.fullTextAnnotation.text : '';
-        const urlMatch = detectedText.match(/https?:\/\/[\w\-._~:\/?#@!$&'()*+,;=%]+/g);
-        if (urlMatch) extractedLinks.push([urlMatch[0]]);
-    }
-
-    await sheets.spreadsheets.values.update({
-        spreadsheetId: sheetId,
-        range: 'Sheet1!A2:A',
-        valueInputOption: 'RAW',
-        resource: { values: extractedLinks },
-    });
-    return sheetId;
-}
-
-async function scrapeInvoices(sheetId) {
-    const { data } = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: 'Sheet1!A:A',
-    });
-
-    const rows = data.values;
-    if (!rows || rows.length === 0) return;
-
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-    let currentRowSheet2 = 2;
-
-    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-        const invoiceLink = rows[rowIndex][0];
-        if (!invoiceLink) continue;
-
-        await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        const invoiceData = await page.evaluate(() => {
-            const getText = (xpath) => {
-                const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                return element ? element.innerText.trim() : 'N/A';
-            };
-            return {
-                businessName: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/ul/li[1]'),
-                invoiceNumber: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4'),
-                grandTotal: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/h1'),
-                vat: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
-                invoiceType: getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
-            };
-        });
-
-        await sheets.spreadsheets.values.update({
-            spreadsheetId: sheetId,
-            range: `Sheet2!A${currentRowSheet2}:E${currentRowSheet2}`,
-            valueInputOption: 'RAW',
-            resource: { values: [[invoiceData.businessName, invoiceData.invoiceNumber, invoiceData.grandTotal, invoiceData.vat, invoiceData.invoiceType]] }
-        });
-        currentRowSheet2++;
-    }
-    await browser.close();
-}
-
-app.get('/start', async (req, res) => {
+app.get('/scrape', async (req, res) => {
     try {
-        const folderId = await getDriveFolderId();
-        if (!folderId) {
-            return res.status(400).json({ success: false, message: "No folder selected" });
+        const browser = await puppeteer.launch({ 
+            headless: true,
+            ignoreHTTPSErrors: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--disable-software-rasterizer'
+            ]
+        });
+        const page = await browser.newPage();
+        await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+
+        const sheetId = process.env.GOOGLE_SHEET_ID;
+        const { data } = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: 'Sheet1!A:A',
+        });
+
+        const rows = data.values;
+        let extractedData = [];
+        let currentRowSheet2 = 2;
+        let currentRowSheet3 = 2;
+
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            const invoiceLink = rows[rowIndex][0];
+            if (!invoiceLink || !/^https?:\/\//.test(invoiceLink)) {
+                console.warn(`⚠️ Skipping invalid URL: ${invoiceLink}`);
+                continue;
+            }
+
+            console.log(`🔄 Processing row ${rowIndex + 1} - ${invoiceLink}`);
+
+            let navigationSuccess = false;
+            for (let attempt = 1; attempt <= 3; attempt++) { // Retry mechanism
+                try {
+                    await page.goto(invoiceLink, { waitUntil: 'networkidle2', timeout: 30000 });
+                    navigationSuccess = true;
+                    break;
+                } catch (navError) {
+                    console.error(`❌ Attempt ${attempt} - Failed to navigate to ${invoiceLink}:`, navError);
+                }
+            }
+
+            if (!navigationSuccess) {
+                console.error(`❌ Skipping ${invoiceLink} after multiple failed attempts`);
+                continue;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            const invoiceData = await page.evaluate(() => {
+                const getText = (xpath) => {
+                    const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                    return element ? element.innerText.trim().replace('TVSH', 'VAT') : 'N/A';
+                };
+
+                const extractInvoiceNumber = () => {
+                    const fullText = getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[1]/h4');
+                    const match = fullText.match(/\d+\/\d+/);
+                    return match ? match[0] : 'N/A';
+                };
+
+                const extractItems = () => {
+                    let items = [];
+                    const showMoreBtn = document.querySelector("button.show-more");
+                    if (showMoreBtn) {
+                        showMoreBtn.click();
+                    }
+                    
+                    const itemNodes = document.evaluate("/html/body/app-root/app-verify-invoice/div/section[3]/div/ul/li/ul/li", document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+                    let currentNode = itemNodes.iterateNext();
+                    while (currentNode) {
+                        const itemParts = currentNode.innerText.trim().replace('TVSH', 'VAT').split('\n');
+                        if (itemParts.length >= 3) {
+                            items.push([itemParts[0], itemParts[1], itemParts[2]]);
+                        } else {
+                            items.push([itemParts[0], itemParts[1] || '', '']);
+                        }
+                        currentNode = itemNodes.iterateNext();
+                    }
+                    return items.length > 0 ? items : [['N/A', 'N/A', 'N/A']];
+                };
+
+                return {
+                    businessName: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/ul/li[1]'),
+                    invoiceNumber: extractInvoiceNumber(),
+                    items: extractItems(),
+                    grandTotal: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/h1'),
+                    vat: getText('/html/body/app-root/app-verify-invoice/div/section[1]/div/div[2]/small[2]/strong'),
+                    invoiceType: getText('/html/body/app-root/app-verify-invoice/div/section[2]/div/div/div/div[5]/p')
+                };
+            });
+
+            console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
+
+            if (invoiceData.businessName === 'N/A' && invoiceData.invoiceNumber === 'N/A') {
+                console.warn(`⚠️ No valid data extracted from ${invoiceLink}`);
+                continue;
+            }
+
+            // Update Sheet2 with invoice items
+            let updateValuesSheet2 = [[invoiceData.businessName, invoiceData.invoiceNumber, ...invoiceData.items[0] || ['', '', '']]];
+            for (let i = 1; i < invoiceData.items.length; i++) {
+                updateValuesSheet2.push([null, null, ...invoiceData.items[i]]);
+            }
+
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: sheetId,
+                range: `Sheet2!A${currentRowSheet2}:E${currentRowSheet2 + updateValuesSheet2.length - 1}`,
+                valueInputOption: 'RAW',
+                resource: { values: updateValuesSheet2 }
+            });
+            currentRowSheet2 += updateValuesSheet2.length;
+
+            // Update Sheet3 with invoice summary
+            const updateValuesSheet3 = [[
+                invoiceData.businessName,
+                invoiceData.invoiceNumber,
+                invoiceData.grandTotal,
+                invoiceData.vat,
+                invoiceData.invoiceType
+            ]];
+
+            await sheets.spreadsheets.values.update({
+                spreadsheetId: sheetId,
+                range: `Sheet3!A${currentRowSheet3}:E${currentRowSheet3}`,
+                valueInputOption: 'RAW',
+                resource: { values: updateValuesSheet3 }
+            });
+            currentRowSheet3++;
+
+            extractedData.push(invoiceData);
         }
-        let sheetId = await createSpreadsheet();
-        sheetId = await extractLinksFromImages(sheetId, folderId);
-        await scrapeInvoices(sheetId);
-        res.json({ success: true, message: "Process completed successfully", sheetId });
+
+        await browser.close();
+        res.json({ success: true, message: "Scraping completed", data: extractedData });
     } catch (error) {
-        console.error("❌ Error during process:", error);
-        res.status(500).json({ success: false, message: "Process failed", error: error.toString() });
+        console.error("❌ Error during scraping:", error);
+        res.status(500).json({ success: false, message: "Scraping failed", error: error.toString() });
     }
 });
 
