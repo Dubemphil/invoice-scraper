@@ -103,22 +103,15 @@ app.get('/scrape', async (req, res) => {
                 continue;
             }
 
-            const updateValuesSheet2 = invoiceData.map(item => [invoiceLink, new Date().toISOString(), ...item]);
+            const updateValuesSheet2 = invoiceData.map(item => [null, null, ...item]);
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `Sheet2!A2:H3`,
+                range: `Sheet2!C${currentRowSheet2}:H${currentRowSheet2 + updateValuesSheet2.length - 1}`,
                 valueInputOption: 'RAW',
-                resource: { values: [["Test Link", new Date().toISOString(), "Item", "100", "200", "2", "Detail", "10%"]] }
+                resource: { values: updateValuesSheet2 }
             });
-            
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: sheetId,
-                range: `Sheet3!A${currentRowSheet3}:F${currentRowSheet3 + invoiceData.length - 1}`,
-                valueInputOption: 'RAW',
-                resource: { values: invoiceData }
-            });
-            currentRowSheet3 += invoiceData.length;
+            currentRowSheet2 += updateValuesSheet2.length;
 
             extractedData.push(invoiceData);
         }
