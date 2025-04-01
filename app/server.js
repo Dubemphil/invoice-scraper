@@ -46,7 +46,6 @@ app.get('/scrape', async (req, res) => {
         const rows = data.values;
         let extractedData = [];
         let currentRowSheet2 = 2;
-        let currentRowSheet3 = 2;
 
         for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
             const invoiceLink = rows[rowIndex][0];
@@ -115,9 +114,12 @@ app.get('/scrape', async (req, res) => {
             currentRowSheet2 += updateValuesSheet2.length;
             
             extractedData.push(invoiceData);
-            
-        await browser.close();
+        }
+
+        await browser.close(); // ✅ Moved outside the loop
+
         res.json({ success: true, message: "Scraping completed", data: extractedData });
+
     } catch (error) {
         console.error("❌ Error during scraping:", error);
         res.status(500).json({ success: false, message: "Scraping failed", error: error.toString() });
