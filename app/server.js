@@ -78,44 +78,44 @@ app.get('/scrape', async (req, res) => {
             const invoiceData = await page.evaluate(() => {
                 const items = [];
                 const itemBlocks = document.querySelectorAll(".invoice-items-list div");
-
+            
                 itemBlocks.forEach((block) => {
-                    const parts = block.innerText.trim().split('\n');
-                    if (parts.length < 5) return;
-
-                    const itemName = parts[0];
-                    const unitPrice = parts[1].replace(' LEK', '').trim();
-                    const totalPrice = parts[2].replace(' LEK', '').trim();
-                    const quantity = parts[3].trim();
-                    const extraDetail = parts[4].replace(' LEK', '').trim();
-                    const vat = parts[5] ? parts[5].replace('VAT:', '').trim() : 'N/A';
-
-                    items.push([itemName, unitPrice, totalPrice, quantity, extraDetail, vat]);
+                    const parts = block.innerText.trim().split('\n').filter(Boolean);
+            
+                    if (parts.length < 4) return; // Ensure we have enough parts
+            
+                    const itemName = parts[0].trim();
+                    const unitPrice = parts[1]?.replace(' LEK', '').trim() || 'N/A';
+                    const quantity = parts.find((p) => p.match(/^\d+X?$/)) || 'N/A'; // Find quantity pattern (e.g., "6X", "12", "0.86X")
+                    const totalPrice = parts.find((p) => p.includes(' LEK') && !p.includes('VAT:'))?.replace(' LEK', '').trim() || 'N/A';
+                    const vat = parts.find((p) => p.includes('VAT:'))?.replace('VAT:', '').trim() || 'N/A';
+            
+                    items.push([itemName, unitPrice, quantity, totalPrice, vat]);
                 });
-
+            
                 return items;
             });
-
+            
             console.log(`✅ Extracted Data for row ${rowIndex + 1}:`, invoiceData);
-
+            
             if (invoiceData.length === 0) {
                 console.warn(`⚠️ No valid data extracted from ${invoiceLink}`);
                 continue;
             }
-
+            
             const updateValuesSheet2 = invoiceData.map(item => [null, null, ...item]);
-
+            
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
                 range: `Sheet2!C${currentRowSheet2}:H${currentRowSheet2 + updateValuesSheet2.length - 1}`,
                 valueInputOption: 'RAW',
                 resource: { values: updateValuesSheet2 }
             });
+            
             currentRowSheet2 += updateValuesSheet2.length;
-
+            
             extractedData.push(invoiceData);
-        }
-
+            
         await browser.close();
         res.json({ success: true, message: "Scraping completed", data: extractedData });
     } catch (error) {
